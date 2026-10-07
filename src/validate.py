@@ -226,7 +226,9 @@ def validate(report, feature_names, arrays, tiers, tables) -> Validator:
         )
 
     # winsorization fences hold on every split
-    fences = report.get("winsorization", {}).get("fences", {})
+    # data_prep records enforced ranges under "value_ranges"; older runs
+    # used "winsorization". Accept either.
+    fences = (report.get("value_ranges") or report.get("winsorization") or {}).get("fences", {})
     if fences:
         for column, bounds in fences.items():
             for k in splits:
@@ -236,12 +238,12 @@ def validate(report, feature_names, arrays, tiers, tables) -> Validator:
                     and (values <= bounds["high"] + 1e-9).all()
                 )
                 v.check(
-                    f"'{k}' {column} within winsor fences",
+                    f"'{k}' {column} within enforced range",
                     ok,
                     f"[{bounds['low']:,.1f}, {bounds['high']:,.1f}]",
                 )
     else:
-        v.check("winsorization fences recorded", False, "missing")
+        v.check("enforced value ranges recorded", False, "missing")
 
     # ------------------------------------------------------------------
     v.group("LEAKAGE")
@@ -399,7 +401,9 @@ def make_plots(report, feature_names, arrays, tiers, tables, fig_dir: Path) -> l
     saved.append(_save(fig, fig_dir, "val_missing_after_clean.png").name)
 
     # 5. winsor fences on area_m2 (train)
-    fences = report.get("winsorization", {}).get("fences", {})
+    # data_prep records enforced ranges under "value_ranges"; older runs
+    # used "winsorization". Accept either.
+    fences = (report.get("value_ranges") or report.get("winsorization") or {}).get("fences", {})
     fig, ax = plt.subplots(figsize=(8, 4.5))
     vals = pd.to_numeric(tables["train"].get("area_m2"), errors="coerce").dropna()
     ax.hist(vals, bins=80, color="steelblue", edgecolor="white", alpha=0.8)
@@ -408,7 +412,7 @@ def make_plots(report, feature_names, arrays, tiers, tables, fig_dir: Path) -> l
         ax.axvline(lo, color="red", ls="--", lw=1.5, label=f"low={lo:,.0f}")
         ax.axvline(hi, color="red", ls="--", lw=1.5, label=f"high={hi:,.0f}")
         ax.legend(fontsize=8)
-    ax.set_title("area_m2 on train with winsor fences (rows kept, extremes clipped)")
+    ax.set_title("area_m2 on train with the enforced range (rows outside were removed)")
     ax.set_xlabel("area_m2")
     saved.append(_save(fig, fig_dir, "val_winsor_area.png").name)
 

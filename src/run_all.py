@@ -3,11 +3,43 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# Figures that report/data_report.tex includes, and where explore.py puts
+# them. The LaTeX file refers to them by the short name on the left.
+#
+# These are generated artifacts, so .gitignore keeps them out of the repo.
+# That means a fresh clone has an empty report/figures/ and the report will
+# not build until this step has run. Copying them here is what makes
+# "python -m src.run_all && tectonic report/data_report.tex" work from a
+# clean checkout.
+REPORT_FIGURES = {
+    "price_distribution.png": "fig03_price_distribution.png",
+    "missing_values.png": "fig01_missing_values.png",
+    "map_of_baku.png": "fig09_map_of_baku.png",
+    "feature_availability.png": "fig12_feature_availability.png",
+}
+
+
+def copy_report_figures(eda_out: str) -> None:
+    """Put the figures the LaTeX report needs where the LaTeX report expects."""
+    source_dir = ROOT / eda_out / "figures"
+    target_dir = ROOT / "report" / "figures"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for target_name, source_name in REPORT_FIGURES.items():
+        source = source_dir / source_name
+        if not source.exists():
+            raise FileNotFoundError(
+                f"{source} is missing; report/data_report.tex needs it as "
+                f"{target_name}. Did explore.py run?"
+            )
+        shutil.copyfile(source, target_dir / target_name)
+    print(f"  copied {len(REPORT_FIGURES)} figures -> {target_dir}")
 
 
 def sh(*cmd: str) -> None:
@@ -24,7 +56,7 @@ def main() -> int:
     a = p.parse_args()
 
     # 1. clean + split + model-ready arrays (seeds fixed in src/data_prep.py)
-    from data_prep import run as prep_run
+    from src.data_prep import run as prep_run
 
     prep_run(a.data, a.processed)
 
@@ -34,10 +66,14 @@ def main() -> int:
     # 3. EDA report + figures (read-only, never modifies data/)
     sh(sys.executable, "explore.py", "--data", a.data, "--out", a.eda_out)
 
-    # 4. model diagnostics + metrics.json/md (sklearn baselines until DT/SVM land)
+    # 4. the subset of those figures that the LaTeX report includes
+    print("\n$ copy report figures")
+    copy_report_figures(a.eda_out)
+
+    # 5. model diagnostics + metrics.json/md (sklearn baselines until DT/SVM land)
     sh(sys.executable, "-m", "src.evaluate", "--dir", a.processed, "--out", a.fig_out)
 
-    # 5. one-page summary pointing at the artifacts
+    # 6. one-page summary pointing at the artifacts
     prep = json.loads((Path(a.processed) / "preprocessing_report.json").read_text())
     metrics = json.loads((Path(a.fig_out) / "metrics.json").read_text())
     s = metrics["task_a_val"]

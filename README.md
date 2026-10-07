@@ -36,15 +36,20 @@ only. For the SVM you do **not** need a QP/SMO solver — use the
 ├── .gitignore
 ├── contribution_report.md  # who did what (keep in repo root)
 ├── data/                   # dataset lives here (not committed — see data/README.md)
+│   └── processed/          #   model-ready arrays, written by data_prep (not committed)
+├── explore.py              # read-only EDA + the evidence for the cleaning decisions
 ├── src/                    # YOUR from-scratch code
-│   ├── data_prep.py        #   loading, cleaning, split, tier label
+│   ├── data_prep.py        #   loading, cleaning, split, features, tier label
 │   ├── decision_tree.py    #   DecisionTree (Gini/entropy/MSE)
 │   ├── svm.py              #   PegasosSVM (hinge-loss sub-gradient)
+│   ├── validate.py         #   58 automatic checks on the processed data
 │   ├── evaluate.py         #   metrics + comparison helpers
 │   └── run_all.py          #   ONE command reproduces every number/figure
+├── reports/                # generated analysis output (not committed)
 ├── report/                 # IEEE report (self-contained, no IEEEtran.cls)
-│   ├── report.tex
-│   └── figures/
+│   ├── report.tex          #   the final report
+│   ├── data_report.tex     #   data & preprocessing write-up
+│   └── figures/            #   figures the report includes (copied by run_all)
 └── presentation/           # your slides PDF
 ```
 

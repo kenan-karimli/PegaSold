@@ -1,6 +1,9 @@
-# Pin your exact versions (run `pip freeze` once your env works).
-# These are sensible starting points — adjust as needed, then PIN them.
+# Exact versions, from `pip freeze`. Fixed so that a clean environment
+# reproduces the numbers in the report byte for byte.
 numpy==2.5.3
 pandas==3.0.6
 matplotlib==3.11.2
-scikit-learn==1.9.1  # baselines / optional bonuses ONLY — not for your models
+scikit-learn==1.9.1
+# pulled in by scikit-learn; pinned so the baselines stay reproducible
+scipy==1.18.1
+joblib==1.6.0
