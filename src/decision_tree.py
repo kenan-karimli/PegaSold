@@ -49,6 +49,8 @@ class DecisionTree:
         criterion=None,
         max_depth=None,
         min_samples_split=2,
+        min_samples_leaf=1,
+        min_impurity_decrease=0.0,
     ):
         """Save model settings and initialize attributes populated by fit.
 
@@ -85,10 +87,16 @@ class DecisionTree:
             raise ValueError(
                 "min_samples_split must be at least 2."
             )
+        if min_samples_leaf < 1:
+            raise ValueError("min_samples_leaf must be at least 1.")
+        if min_impurity_decrease < 0:
+            raise ValueError("min_impurity_decrease cannot be negative.")
         self.task = task
         self.criterion = criterion
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
+        self.min_samples_leaf = min_samples_leaf
+        self.min_impurity_decrease = min_impurity_decrease
 
         # This will contain the root TreeNode after fit()
         self.root = None
@@ -115,10 +123,23 @@ class DecisionTree:
 
         if X.shape[0] == 0:
             raise ValueError("X and y cannot be empty")
+        if X.shape[1] == 0:
+            raise ValueError("X must contain at least one feature")
 
         if not np.issubdtype(X.dtype, np.number):
             raise ValueError("X must contain numeric values")
+        if not np.isfinite(X).all():
+            raise ValueError("X must contain only finite values")
+        if self.task == "regression":
+            try:
+                y = y.astype(float)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Regression targets must be numeric") from exc
+            if not np.isfinite(y).all():
+                raise ValueError("Regression targets must be finite")
 
+        self.n_features_in_ = X.shape[1]
+        self.classes_ = np.unique(y) if self.task == "classification" else None
         self.root = self._build_tree(X, y, depth=0)
 
         return self
@@ -139,8 +160,23 @@ class DecisionTree:
             raise ValueError("X must be a 2D array")
         if not np.issubdtype(X.dtype, np.number):
             raise ValueError("X must contain numeric values")
+        if X.shape[1] != self.n_features_in_ or not np.isfinite(X).all():
+            raise ValueError("X must have the fitted feature count and finite values")
 
         return np.asarray([self._predict_one(row, self.root) for row in X])
+
+    def predict_proba(self, X):
+        """Return class frequencies in each reached leaf."""
+        if self.task != "classification":
+            raise ValueError("predict_proba is available only for classification")
+        if self.root is None:
+            raise ValueError("fit must be called before predict_proba")
+        X = np.asarray(X)
+        if X.ndim != 2 or X.shape[1] != self.n_features_in_:
+            raise ValueError("X must be 2D with the fitted feature count")
+        if not np.issubdtype(X.dtype, np.number) or not np.isfinite(X).all():
+            raise ValueError("X must contain finite numeric values")
+        return np.vstack([self._predict_proba_one(row, self.root) for row in X])
 
     def _build_tree(self, X, y, depth):
         """Build one node recursively and return its TreeNode.
@@ -153,12 +189,14 @@ class DecisionTree:
         prediction = self._leaf_value(y)
 
         if self._should_stop(y, depth):
-            return TreeNode(value=prediction)
+            return self._make_leaf(y, prediction)
 
         best_split = self._best_split(X, y)
 
         if best_split is None:
-            return TreeNode(value=prediction)
+            return self._make_leaf(y, prediction)
+        if best_split[2] < self.min_impurity_decrease:
+            return self._make_leaf(y, prediction)
 
         feature_index, threshold, _ = best_split
 
@@ -172,7 +210,7 @@ class DecisionTree:
         y_right = y[right_mask]
 
         if len(y_left) == 0 or len(y_right) == 0:
-            return TreeNode(value=prediction)
+            return self._make_leaf(y, prediction)
 
         left_child = self._build_tree(x_left, y_left, depth + 1)
         right_child = self._build_tree(x_right, y_right, depth + 1)
@@ -183,6 +221,13 @@ class DecisionTree:
             left=left_child,
             right=right_child,
         )
+
+    def _make_leaf(self, y, prediction):
+        node = TreeNode(value=prediction)
+        if self.task == "classification":
+            values, counts = np.unique(y, return_counts=True)
+            node.class_counts = dict(zip(values.tolist(), counts.tolist()))
+        return node
 
     def _should_stop(self, y, depth):
         """Decide whether the current node should become a leaf.
@@ -239,7 +284,7 @@ class DecisionTree:
         # Calculate impurity before splitting
         parent_score = self._impurity(y)
 
-        best_gain = 0.0
+        best_gain = self.min_impurity_decrease
         best_feature = None
         best_threshold = None
 
@@ -262,6 +307,8 @@ class DecisionTree:
                 right_mask = X[:, feature_index] > threshold
 
                 if not np.any(left_mask) or not np.any(right_mask):
+                    continue
+                if left_mask.sum() < self.min_samples_leaf or right_mask.sum() < self.min_samples_leaf:
                     continue
 
                 y_left = y[left_mask]
@@ -308,3 +355,9 @@ class DecisionTree:
             else:
                 node = node.right
         return node.value
+
+    def _predict_proba_one(self, row, node):
+        while node.feature_index is not None:
+            node = node.left if row[node.feature_index] <= node.threshold else node.right
+        counts = node.class_counts
+        return np.asarray([counts.get(label, 0) for label in self.classes_], dtype=float) / sum(counts.values())
