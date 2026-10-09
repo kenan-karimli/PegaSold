@@ -54,3 +54,16 @@ def per_class_prf(y_true, y_pred, labels=None):
     denominator = precision + recall
     f1 = np.divide(2 * precision * recall, denominator, out=np.zeros_like(tp), where=denominator > 0)
     return precision, recall, f1, true_count, labels
+
+def roc_auc(y_true, scores, pos_label):
+    "Binary ROC-AUC"
+    y_true = np.asarray(y_true)
+    scores = np.asarray(scores, dtype=float)
+    pos = y_true == pos_label
+    n_pos = int(pos.sum())
+    n_neg = int((~pos).sum())
+    if n_pos == 0 or n_neg == 0:
+        return float("nan")
+
+
+print(float("nan"))
