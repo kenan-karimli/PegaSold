@@ -64,6 +64,9 @@ def roc_auc(y_true, scores, pos_label):
     n_neg = int((~pos).sum())
     if n_pos == 0 or n_neg == 0:
         return float("nan")
-
-
-print(float("nan"))
+    order = np.argsort(scores, kind="mergesort")
+    _, inv, counts = np.unique(scores[order], return_inverse=True, return_counts=True)
+    mid_rank = np.cumsum(counts) - (counts  - 1) / 2.0
+    ranks = np.empty(len(scores))
+    ranks[order] = mid_rank[inv]
+    return float((ranks[pos].sum() - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg))
