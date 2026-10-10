@@ -1,9 +1,9 @@
 #   metrics + comparison helpers
 """Evaluation metrics (NumPy, from scratch) and model comparison utilities.
- 
+
 Works with any object that has fit(X, y) and predict(X): the from-scratch
 DecisionTree, PegasosSVM, and sklearn baselines.
- 
+
 Main entry points
 -----------------
 classification_report_dict / regression_report_dict : metric dictionaries
@@ -20,7 +20,6 @@ import time
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot
 
 from decision_tree import DecisionTree
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
@@ -29,8 +28,7 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 # Classification metrics:
 
 def accuracy(y_true, y_pred):
-    y_true, y_pred = np.asarray(y_true)
-    y_pred = np.asarray(y_pred)
+    y_true, y_pred = np.asarray(y_true), np.asarray(y_pred)
     return float(np.mean(y_true == y_pred))
 
 def confusion_matrix(y_true, y_pred, labels=None):
@@ -48,7 +46,7 @@ def confusion_matrix(y_true, y_pred, labels=None):
     return cm, labels
 
 def per_class_prf(y_true, y_pred, labels=None):
-    """Per class precision, recall, F1-score and support (zero-devision -> 0)"""
+    """Per class precision, recall, F1-score and support (zero-division -> 0)"""
     cm, labels = confusion_matrix(y_true, y_pred, labels)
     tp = np.diag(cm).astype(float)
     pred_count = cm.sum(axis=0).astype(float)
@@ -70,7 +68,7 @@ def roc_auc(y_true, scores, pos_label):
         return float("nan")
     order = np.argsort(scores, kind="mergesort")
     _, inv, counts = np.unique(scores[order], return_inverse=True, return_counts=True)
-    mid_rank = np.cumsum(counts) - (counts  - 1) / 2.0
+    mid_rank = np.cumsum(counts) - (counts - 1) / 2.0
     ranks = np.empty(len(scores))
     ranks[order] = mid_rank[inv]
     return float((ranks[pos].sum() - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg))
@@ -79,7 +77,7 @@ def roc_curve(y_true, scores, pos_label):
     y_true = np.asarray(y_true)
     scores = np.asarray(scores, dtype=float)
     pos = (y_true == pos_label).astype(float)
-    order = np.argsort(scores, kind="mergesort")
+    order = np.argsort(-scores, kind="mergesort")   # highest score first
     pos = pos[order]
     scores = scores[order]
     distinct = np.where(np.diff(scores))[0]
@@ -90,7 +88,7 @@ def roc_curve(y_true, scores, pos_label):
     fpr = np.r_[0, fps / max(fps[-1], 1)]
     return fpr, tpr
 
-def classification_report_dict(y_true, y_pred, labels=None, pos_label=None, scores=None):
+def classification_report_dict(y_true, y_pred, scores=None, pos_label=None):
     """Accuracy, macro/weighted precision-recall-F1, optional ROC-AUC"""
     p, r, f1, support, labels = per_class_prf(y_true, y_pred)
     w = support / support.sum()
@@ -120,15 +118,15 @@ def rmse(y_true, y_pred):
     return float(np.sqrt(mse(y_true, y_pred)))
 
 def r2_score(y_true, y_pred):
-    y_true = np.asarray(y_true)
-    y_pred = np.asarray(y_pred)
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
     ss_res = np.sum((y_true - y_pred) ** 2)
     ss_tot = np.sum((y_true - y_true.mean()) ** 2)
     return float(1.0 - ss_res / ss_tot) if ss_tot > 0 else float("nan")
 
 def mape(y_true, y_pred):
-    y_true = np.asarray(y_true)
-    y_pred = np.asarray(y_pred)
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
     nz = y_true != 0
     if not nz.any():
         return float("nan")
@@ -163,15 +161,15 @@ def evaluate_model(model, X, y, task="classification", classes=None):
     pos_label = classes[1] if len(classes) == 2 else None
     return classification_report_dict(y, y_pred, scores, pos_label), y_pred, scores
 
-def compare_model(models, X,_train, y_train, X_test, y_test, task="classification", out_dir=None):
+def compare_models(models, X_train, y_train, X_test, y_test, task="classification", out_dir=None):
     """Fit every model on the training data and evaluate on the test data.
- 
+
     Args:
         models: dict name -> unfitted model (fit/predict). Models are deep-
             copied, so the originals are untouched.
         task: "classification" or "regression".
         out_dir: if given, results table/JSON are saved there.
- 
+
     Returns:
         results: DataFrame (one row per model, metrics + timing)
         details: dict name -> {"model", "y_pred", "scores"} for plotting.
@@ -184,27 +182,31 @@ def compare_model(models, X,_train, y_train, X_test, y_test, task="classificatio
 
     rows = []
     details = {}
-    for name, proto, in models.items():
+    for name, proto in models.items():
         model = copy.deepcopy(proto)
         try:
-            t0 = time.pref_counter()
+            t0 = time.perf_counter()
             model.fit(X_train, y_train)
-            fit_time = time.pref_counter() - t0
-            t0 = time.pref_counter()
+            fit_time = time.perf_counter() - t0
+            t0 = time.perf_counter()
             metrics, y_pred, scores = evaluate_model(model, X_test, y_test, task, classes)
-            predict_time = time.pref_counter() - t0
+            predict_time = time.perf_counter() - t0
             if task == "classification":
-                train_acc = accuracy(y_train, model.predict(X_train))
-                metrics["train_accuracy"] = train_acc
+                metrics["train_accuracy"] = accuracy(y_train, model.predict(X_train))
             else:
                 metrics["train_r2"] = r2_score(y_train, model.predict(X_train))
         except ValueError as exc:
-            rows.append({"model": name, "status": "ok", **metrics, "fit_time_s": fit_time, "predict_time_s": predict_time})
-            details[name] = {"model": model, "y_pred": y_pred, "scores": scores}
+            # e.g. the binary-only SVM on a multi-class target
+            rows.append({"model": name, "status": f"skipped: {exc}"})
+            details[name] = {"skipped": str(exc)}
+            continue
+        rows.append({"model": name, "status": "ok", **metrics,
+                     "fit_time_s": fit_time, "predict_time_s": predict_time})
+        details[name] = {"model": model, "y_pred": y_pred, "scores": scores}
 
     results = pd.DataFrame(rows)
     if out_dir is not None:
-        save_results(results, out_dir, name=f"compare_{task}")
+        save_results(results, out_dir, name=f"comparison_{task}")
     return results, details
 
 # Cross-validation:
@@ -223,7 +225,7 @@ def kfold_indices(y, k=5, seed=42, stratified=True):
             folds[i % k].append(j)
     for i in range(k):
         val = np.array(sorted(folds[i]))
-        train = np.array(sorted(j for j in range(k) if j != i for j in folds[j]))
+        train = np.array(sorted(j for f in range(k) if f != i for j in folds[f]))
         yield train, val
 
 def cross_validate(model, X, y, task="classification", k=5, seed=42):
@@ -232,7 +234,7 @@ def cross_validate(model, X, y, task="classification", k=5, seed=42):
     rows = []
     for fold, (tr, va) in enumerate(kfold_indices(y, k, seed, stratified=(task == "classification"))):
         m = copy.deepcopy(model).fit(X[tr], y[tr])
-        classes = np.uniques(y[tr]) if task == "classification" else None
+        classes = np.unique(y[tr]) if task == "classification" else None
         metrics, _, _ = evaluate_model(m, X[va], y[va], task, classes)
         rows.append({"fold": fold, **metrics})
     df = pd.DataFrame(rows)
@@ -259,7 +261,7 @@ def svm_lambda_study(svm_class, X_train, y_train, X_val, y_val, lambdas=(1e-4, 1
             "val_f1_macro": metrics["f1_macro"],
             "val_roc_auc": metrics["roc_auc"],
             "final_objective": svm.objective_history_[-1],
-            "n_support_vectors": int(svm.n_support_vectors_mask_.sum()),
+            "n_support_vectors": int(svm.support_vector_mask_.sum()),
             "margin_width": svm.margin_width_,
         })
         models[lam] = svm
@@ -268,7 +270,7 @@ def svm_lambda_study(svm_class, X_train, y_train, X_val, y_val, lambdas=(1e-4, 1
 # Saving:
 
 def save_results(results, out_dir, name="results"):
-    os.mkdir(out_dir, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
     results.to_csv(os.path.join(out_dir, f"{name}.csv"), index=False)
     with open(os.path.join(out_dir, f"{name}.json"), "w") as f:
         json.dump(json.loads(results.to_json(orient="records")), f, indent=2)
@@ -276,6 +278,7 @@ def save_results(results, out_dir, name="results"):
 # Plots:
 
 def _plt():
+    import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     return plt
@@ -286,7 +289,7 @@ def _finish(fig, path):
         fig.savefig(path, dpi=150, bbox_inches="tight")
     return fig
 
-def plot_metrics_comparison(results, metrics=("accuracy", "f1_macro", "roc_auc"), path=None, title="Model comparison"):
+def plot_metric_comparison(results, metrics=("accuracy", "f1_macro", "roc_auc"), path=None, title="Model comparison"):
     """Grouped bar chart of selected metrics across models"""
     plt = _plt()
     df = results[results["status"] == "ok"]
@@ -302,11 +305,13 @@ def plot_metrics_comparison(results, metrics=("accuracy", "f1_macro", "roc_auc")
     ax.legend()
     return _finish(fig, path)
 
+plot_metrics_comparison = plot_metric_comparison   # alias for the other spelling
+
 def plot_confusion_matrices(details, y_test, path=None, normalize=True):
     plt = _plt()
     ok = {k: v for k, v in details.items() if "y_pred" in v}
     labels = np.unique(y_test)
-    fig, axes = plt.subplots(1, len(ok), figsize=(4 *len(ok), 3.8), squeeze=False)
+    fig, axes = plt.subplots(1, len(ok), figsize=(4 * len(ok), 3.8), squeeze=False)
     for ax, (name, d) in zip(axes[0], ok.items()):
         cm, _ = confusion_matrix(y_test, d["y_pred"], labels)
         shown = cm / cm.sum(axis=1, keepdims=True).clip(min=1) if normalize else cm
@@ -320,7 +325,8 @@ def plot_confusion_matrices(details, y_test, path=None, normalize=True):
         ax.set_ylabel("True")
         for i in range(len(labels)):
             for j in range(len(labels)):
-                ax.text(j, i, f"{cm[i, j]}", ha="center", va="center", color="white" if cm[i, j] > shown.max() / 2.0 else "black")
+                ax.text(j, i, f"{cm[i, j]}", ha="center", va="center",
+                        color="white" if shown[i, j] > shown.max() / 2.0 else "black")
     fig.tight_layout()
     return _finish(fig, path)
 
@@ -348,7 +354,7 @@ def plot_objective(svm_models, path=None):
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Objective")
     ax.set_yscale("log")
-    ax.set_title("SVM objective during tyraining")
+    ax.set_title("SVM objective during training")
     ax.legend()
     return _finish(fig, path)
 
@@ -363,7 +369,7 @@ def plot_lambda_study(study, path=None):
     ax.legend()
     return _finish(fig, path)
 
-def plot_regression_fir(details, y_test, path=None):
+def plot_regression_fit(details, y_test, path=None):
     plt = _plt()
     ok = {k: v for k, v in details.items() if "y_pred" in v}
     fig, axes = plt.subplots(1, len(ok), figsize=(4 * len(ok), 4), squeeze=False)
@@ -380,18 +386,22 @@ def plot_regression_fir(details, y_test, path=None):
 # Default model sets:
 
 def default_models(task="classification", binary=True, svm_params=None, tree_params=None):
- 
+    """Our from-scratch models plus sklearn baselines, ready for compare_models."""
     tree_params = {"max_depth": 8, **(tree_params or {})}
     if task == "regression":
         from sklearn.linear_model import Ridge
-        return {"DecisionTree (ours)": DecisionTree(task="regression", **tree_params), "DecisionTree (sklearn)": DecisionTreeRegressor(max_depth=tree_params["max_depth"], random_state=42), "Ridge (sklearn)": Ridge(alpha=1.0),}
- 
+        return {
+            "DecisionTree (ours)": DecisionTree(task="regression", **tree_params),
+            "DecisionTree (sklearn)": DecisionTreeRegressor(max_depth=tree_params["max_depth"], random_state=42),
+            "Ridge (sklearn)": Ridge(alpha=1.0),
+        }
+
     models = {
         "DecisionTree gini (ours)": DecisionTree(task="classification", criterion="gini", **tree_params),
         "DecisionTree entropy (ours)": DecisionTree(task="classification", criterion="entropy", **tree_params),
         "DecisionTree (sklearn)": DecisionTreeClassifier(max_depth=tree_params["max_depth"], random_state=42),
     }
-    if binary:
+    if binary:   # PegasosSVM is binary only
         from svm import PegasosSVM
         from sklearn.linear_model import SGDClassifier
         from sklearn.svm import LinearSVC
