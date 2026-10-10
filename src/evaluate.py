@@ -20,6 +20,10 @@ import time
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot
+
+from decision_tree import DecisionTree
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 
 # Classification metrics:
@@ -236,3 +240,164 @@ def cross_validate(model, X, y, task="classification", k=5, seed=42):
     for col in df.columns[1:]:
         summary[col] = [df[col].mean(), df[col].std(ddof=1)]
     return pd.concat([df, summary], ignore_index=True)
+
+# SVM lambda study:
+
+def svm_lambda_study(svm_class, X_train, y_train, X_val, y_val, lambdas=(1e-4, 1e-3, 1e-2, 1e-1, 1.0), epochs=50, random_state=42):
+    """Train PegasosSVM per lambda; report accuracy, objective, margin"""
+    rows = []
+    models = {}
+    for lam in lambdas:
+        svm = svm_class(lambda_param=lam, epochs=epochs, random_state=random_state)
+        svm.fit(X_train, y_train)
+        classes = np.unique(y_train)
+        metrics, _, _ = evaluate_model(svm, X_val, y_val, "classification", classes)
+        rows.append({
+            "lambda": lam,
+            "train_accuracy": accuracy(y_train, svm.predict(X_train)),
+            "val_accuracy": metrics["accuracy"],
+            "val_f1_macro": metrics["f1_macro"],
+            "val_roc_auc": metrics["roc_auc"],
+            "final_objective": svm.objective_history_[-1],
+            "n_support_vectors": int(svm.n_support_vectors_mask_.sum()),
+            "margin_width": svm.margin_width_,
+        })
+        models[lam] = svm
+    return pd.DataFrame(rows), models
+
+# Saving:
+
+def save_results(results, out_dir, name="results"):
+    os.mkdir(out_dir, exist_ok=True)
+    results.to_csv(os.path.join(out_dir, f"{name}.csv"), index=False)
+    with open(os.path.join(out_dir, f"{name}.json"), "w") as f:
+        json.dump(json.loads(results.to_json(orient="records")), f, indent=2)
+
+# Plots:
+
+def _plt():
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    return plt
+
+def _finish(fig, path):
+    if path:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+    return fig
+
+def plot_metrics_comparison(results, metrics=("accuracy", "f1_macro", "roc_auc"), path=None, title="Model comparison"):
+    """Grouped bar chart of selected metrics across models"""
+    plt = _plt()
+    df = results[results["status"] == "ok"]
+    metrics = [m for m in metrics if m in df.columns and df[m].notna().any()]
+    x = np.arange(len(df))
+    width = 0.8 / max(len(metrics), 1)
+    fig, ax = plt.subplots(figsize=(max(6, len(df) * 1.6), 4))
+    for i, m in enumerate(metrics):
+        ax.bar(x + i * width, df[m].fillna(0), width, label=m)
+    ax.set_xticks(x + width * (len(metrics) - 1) / 2)
+    ax.set_xticklabels(df["model"], rotation=20, ha="right")
+    ax.set_title(title)
+    ax.legend()
+    return _finish(fig, path)
+
+def plot_confusion_matrices(details, y_test, path=None, normalize=True):
+    plt = _plt()
+    ok = {k: v for k, v in details.items() if "y_pred" in v}
+    labels = np.unique(y_test)
+    fig, axes = plt.subplots(1, len(ok), figsize=(4 *len(ok), 3.8), squeeze=False)
+    for ax, (name, d) in zip(axes[0], ok.items()):
+        cm, _ = confusion_matrix(y_test, d["y_pred"], labels)
+        shown = cm / cm.sum(axis=1, keepdims=True).clip(min=1) if normalize else cm
+        ax.imshow(shown, cmap="Blues", vmin=0)
+        ax.set_title(name)
+        ax.set_xticks(np.arange(len(labels)))
+        ax.set_yticks(np.arange(len(labels)))
+        ax.set_xticklabels(labels)
+        ax.set_yticklabels(labels)
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("True")
+        for i in range(len(labels)):
+            for j in range(len(labels)):
+                ax.text(j, i, f"{cm[i, j]}", ha="center", va="center", color="white" if cm[i, j] > shown.max() / 2.0 else "black")
+    fig.tight_layout()
+    return _finish(fig, path)
+
+def plot_roc_curves(details, y_test, pos_label, path=None):
+    plt = _plt()
+    fig, ax = plt.subplots(figsize=(5, 4.5))
+    for name, d in details.items():
+        if d.get("scores") is None:
+            continue
+        fpr, tpr = roc_curve(y_test, d["scores"], pos_label)
+        ax.plot(fpr, tpr, label=f"{name} (AUC={roc_auc(y_test, d['scores'], pos_label):.3f})")
+    ax.plot([0, 1], [0, 1], "k--", lw=0.8)
+    ax.set_xlabel("False positive rate")
+    ax.set_ylabel("True positive rate")
+    ax.legend()
+    return _finish(fig, path)
+
+def plot_objective(svm_models, path=None):
+    plt = _plt()
+    if not isinstance(svm_models, dict):
+        svm_models = {"PegasosSVM": svm_models}
+    fig, ax = plt.subplots(figsize=(5.5, 4))
+    for label, m in svm_models.items():
+        ax.plot(range(1, len(m.objective_history_) + 1), m.objective_history_, label=f"lambda={label}" if not isinstance(label, str) else label)
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Objective")
+    ax.set_yscale("log")
+    ax.set_title("SVM objective during tyraining")
+    ax.legend()
+    return _finish(fig, path)
+
+def plot_lambda_study(study, path=None):
+    plt = _plt()
+    fig, ax = plt.subplots(figsize=(5.5, 4))
+    ax.plot(study["lambda"], study["train_accuracy"], "o-", label="train")
+    ax.plot(study["lambda"], study["val_accuracy"], "s-", label="validation")
+    ax.set_xscale("log")
+    ax.set_xlabel("lambda")
+    ax.set_ylabel("Accuracy")
+    ax.legend()
+    return _finish(fig, path)
+
+def plot_regression_fir(details, y_test, path=None):
+    plt = _plt()
+    ok = {k: v for k, v in details.items() if "y_pred" in v}
+    fig, axes = plt.subplots(1, len(ok), figsize=(4 * len(ok), 4), squeeze=False)
+    lo, hi = float(np.min(y_test)), float(np.max(y_test))
+    for ax, (name, d) in zip(axes[0], ok.items()):
+        ax.scatter(y_test, d["y_pred"], s=6, alpha=0.4)
+        ax.plot([lo, hi], [lo, hi], "k--", lw=0.8)
+        ax.set_title(name)
+        ax.set_xlabel("Actual")
+        ax.set_ylabel("Predicted")
+    fig.tight_layout()
+    return _finish(fig, path)
+
+# Default model sets:
+
+def default_models(task="classification", binary=True, svm_params=None, tree_params=None):
+ 
+    tree_params = {"max_depth": 8, **(tree_params or {})}
+    if task == "regression":
+        from sklearn.linear_model import Ridge
+        return {"DecisionTree (ours)": DecisionTree(task="regression", **tree_params), "DecisionTree (sklearn)": DecisionTreeRegressor(max_depth=tree_params["max_depth"], random_state=42), "Ridge (sklearn)": Ridge(alpha=1.0),}
+ 
+    models = {
+        "DecisionTree gini (ours)": DecisionTree(task="classification", criterion="gini", **tree_params),
+        "DecisionTree entropy (ours)": DecisionTree(task="classification", criterion="entropy", **tree_params),
+        "DecisionTree (sklearn)": DecisionTreeClassifier(max_depth=tree_params["max_depth"], random_state=42),
+    }
+    if binary:
+        from svm import PegasosSVM
+        from sklearn.linear_model import SGDClassifier
+        from sklearn.svm import LinearSVC
+        params = {"lambda_param": 0.01, "epochs": 50, **(svm_params or {})}
+        models["PegasosSVM (ours)"] = PegasosSVM(**params)
+        models["SGDClassifier hinge (sklearn)"] = SGDClassifier(
+            loss="hinge", alpha=params["lambda_param"], random_state=42)
+        models["LinearSVC (sklearn)"] = LinearSVC(random_state=42)
+    return models
