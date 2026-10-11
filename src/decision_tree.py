@@ -33,6 +33,8 @@ class TreeNode:
         self.threshold = threshold
         self.left = left
         self.right = right
+        self.impurity_decrease = 0.0
+        self.n_samples = 0
 
 
 class DecisionTree:
@@ -141,6 +143,15 @@ class DecisionTree:
         self.n_features_in_ = X.shape[1]
         self.classes_ = np.unique(y) if self.task == "classification" else None
         self.root = self._build_tree(X, y, depth=0)
+        importances = np.zeros(self.n_features_in_, dtype=float)
+        def collect_importance(node):
+            if node.feature_index is not None:
+                importances[node.feature_index] += node.n_samples * node.impurity_decrease
+                collect_importance(node.left)
+                collect_importance(node.right)
+        collect_importance(self.root)
+        total_importance = importances.sum()
+        self.feature_importances_ = importances / total_importance if total_importance > 0 else importances
 
         return self
 
@@ -215,15 +226,19 @@ class DecisionTree:
         left_child = self._build_tree(x_left, y_left, depth + 1)
         right_child = self._build_tree(x_right, y_right, depth + 1)
 
-        return TreeNode(
+        node = TreeNode(
             feature_index=feature_index,
             threshold=threshold,
             left=left_child,
             right=right_child,
         )
+        node.n_samples = len(y)
+        node.impurity_decrease = float(best_split[2])
+        return node
 
     def _make_leaf(self, y, prediction):
         node = TreeNode(value=prediction)
+        node.n_samples = len(y)
         if self.task == "classification":
             values, counts = np.unique(y, return_counts=True)
             node.class_counts = dict(zip(values.tolist(), counts.tolist()))
@@ -242,7 +257,7 @@ class DecisionTree:
             return True
         if self.task == "classification" and len(np.unique(y)) == 1:
             return True
-        return self.task == "regression" and self._impurity(y) == 0
+        return self.task == "regression" and bool(np.all(y == y[0]))
 
     def _leaf_value(self, y):
         """Calculate the prediction for a leaf containing targets y.
@@ -281,48 +296,60 @@ class DecisionTree:
         """
         n_samples, n_features = X.shape
 
-        # Calculate impurity before splitting
-        parent_score = self._impurity(y)
+        best_gain, best_feature, best_threshold = -np.inf, None, None
+        n = len(y)
+        if self.task == "classification":
+            _, encoded = np.unique(y, return_inverse=True)
+            k = encoded.max() + 1
+            onehot = np.eye(k, dtype=float)[encoded]
+            total = onehot.sum(axis=0)
+        else:
+            # Center the target before prefix-summing squares. Regression
+            # targets here are log(AZN), typically around 12; computing
+            # E[y^2] - E[y]^2 from those large offsets loses precision for
+            # small child nodes and can change which near-tied split wins.
+            # Variance and every MSE split gain are translation invariant.
+            yy = y.astype(float)
+            yy = yy - yy.mean()
+            total_sum, total_sq = yy.sum(), np.dot(yy, yy)
+        parent_score = self._impurity(yy) if self.task == "regression" else self._impurity(y)
 
-        best_gain = self.min_impurity_decrease
-        best_feature = None
-        best_threshold = None
-
-        # Try every feature
         for feature_index in range(n_features):
-
-            # Get sorted unique values for this feature
-            values = np.unique(X[:, feature_index])
-
-            # Need at least two different values to make a split
-            if len(values) < 2:
+            order = np.argsort(X[:, feature_index], kind="mergesort")
+            values = X[order, feature_index]
+            # A boundary is possible only between unequal adjacent feature values.
+            positions = np.flatnonzero(values[:-1] < values[1:]) + 1
+            positions = positions[(positions >= self.min_samples_leaf) &
+                                  (n - positions >= self.min_samples_leaf)]
+            if not positions.size:
                 continue
-
-            # Put thresholds between neighboring values
-            thresholds = (values[:-1] + values[1:]) / 2
-
-            for threshold in thresholds:
-
-                left_mask = X[:, feature_index] <= threshold
-                right_mask = X[:, feature_index] > threshold
-
-                if not np.any(left_mask) or not np.any(right_mask):
-                    continue
-                if left_mask.sum() < self.min_samples_leaf or right_mask.sum() < self.min_samples_leaf:
-                    continue
-
-                y_left = y[left_mask]
-                y_right = y[right_mask]
-
-                # Calculate impurity reduction from the split
-                split_score = self._split_score(y_left, y_right, parent_score)
-
-                gain = split_score
-
-                if gain > best_gain:
-                    best_gain = gain
-                    best_feature = feature_index
-                    best_threshold = threshold
+            thresholds = values[positions - 1] + (values[positions] - values[positions - 1]) / 2
+            if self.task == "classification":
+                left_counts = np.cumsum(onehot[order], axis=0)[positions - 1]
+                right_counts = total - left_counts
+                nl, nr = positions.astype(float), (n - positions).astype(float)
+                if self.criterion == "gini":
+                    il = 1.0 - np.sum(left_counts ** 2, axis=1) / nl ** 2
+                    ir = 1.0 - np.sum(right_counts ** 2, axis=1) / nr ** 2
+                else:
+                    def entropy(counts, sizes):
+                        probs = counts / sizes[:, None]
+                        return -np.sum(np.where(probs > 0, probs * np.log2(np.maximum(probs, 1e-300)), 0), axis=1)
+                    il, ir = entropy(left_counts, nl), entropy(right_counts, nr)
+            else:
+                sorted_y = yy[order]
+                prefix = np.cumsum(sorted_y)
+                prefix_sq = np.cumsum(sorted_y ** 2)
+                nl, nr = positions.astype(float), (n - positions).astype(float)
+                sl, sql = prefix[positions - 1], prefix_sq[positions - 1]
+                sr, sqr = total_sum - sl, total_sq - sql
+                il = np.maximum(0.0, sql / nl - (sl / nl) ** 2)
+                ir = np.maximum(0.0, sqr / nr - (sr / nr) ** 2)
+            gains = parent_score - (positions / n * il + (n - positions) / n * ir)
+            local = int(np.argmax(gains))
+            gain = float(gains[local])
+            if gain > best_gain and gain >= self.min_impurity_decrease:
+                best_gain, best_feature, best_threshold = gain, feature_index, float(thresholds[local])
 
         if best_feature is None:
             return None

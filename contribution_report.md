@@ -1,30 +1,33 @@
-# Contribution Report
+# Contribution Report — PegaSold
 
-Keep this file in the repo root. It is checked at the demo. Be honest and
-specific — "helped with everything" is not acceptable. One row per member,
-plus a short per-member paragraph.
+The role split below is a proposed, balanced ownership plan. Each member should edit their summary to reflect work actually performed and add their GitHub handle and review/commit evidence. Do not treat proposed assignments as a record of completed contributions.
 
 ## Team
+
 | Member (Surname, Name) | GitHub handle | Main responsibilities |
-|------------------------|---------------|-----------------------|
-| ---                    | ---           | ---                   |
-| ---                    | ---           | ---                   |
-| ---                    | ---           | ---                   |
+|---|---|---|
+| Emiliya Abdulhalimova | Add handle | Raw-data EDA, cleaning, leakage decisions, feature preparation, and target/split audit |
+| Aygun Asvarova | Add handle | NumPy decision tree for both tasks, split criteria, tuning, feature importance, and tree analysis |
+| Murad Bagirzade | Add handle | Pegasos SVM and random Fourier extension, scaling/margin diagnostics, and SVM tuning |
+| Kanan Karimli | Add handle | Matched baselines, CV, evaluation/error analysis, reproducibility, and report/presentation integration |
 
 ## Per-member summary
-**Surname, Name —** 2–4 sentences: what you designed, implemented, wrote,
-and debugged. Reference concrete files/PRs/commits.
 
-**Surname, Name —** ...
+**Emiliya Abdulhalimova:** Add 2–4 sentences describing work actually completed, including concrete files, debugging/review, and a result owned.
 
-**Surname, Name —** ...
+**Aygun Asvarova:** Add 2–4 sentences describing work actually completed, including concrete files, debugging/review, and a result owned.
+
+**Murad Bagirzade:** Add 2–4 sentences describing work actually completed, including concrete files, debugging/review, and a result owned.
+
+**Kanan Karimli:** Add 2–4 sentences describing work actually completed, including concrete files, debugging/review, and a result owned.
 
 ## Rough effort split
-Give an approximate percentage per member (should sum to ~100%) and note any
-imbalance and why.
+
+Proposed targets only; revise to reflect actual work. Sum should be approximately 100%.
 
 | Member | Approx. % |
-|--------|-----------|
-| ---    | ---       |
-| ---    | ---       |
-| ---    | ---       |
+|---|---:|
+| Emiliya Abdulhalimova | 25% |
+| Aygun Asvarova | 25% |
+| Murad Bagirzade | 25% |
+| Kanan Karimli | 25% |

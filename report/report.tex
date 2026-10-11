@@ -1,183 +1,38 @@
-% =====================================================================
-%  IEEE-STYLE CONFERENCE REPORT TEMPLATE  (self-contained)
-%  MLE-AI-201 Machine Learning -- Final Project
-%
-%  This template MIMICS the IEEE two-column conference look using only
-%  standard LaTeX packages. It does NOT depend on IEEEtran.cls, so it
-%  compiles anywhere (tectonic, pdflatex, Overleaf) with nothing extra.
-%
-%  Build:   tectonic report.tex      (recommended)
-%     or:   pdflatex report.tex ; pdflatex report.tex
-% =====================================================================
 \documentclass[10pt,twocolumn,a4paper]{article}
+\usepackage[a4paper,margin=.65in,columnsep=.25in]{geometry}
+\usepackage[T1]{fontenc}\usepackage[utf8]{inputenc}\usepackage{mathptmx}
+\usepackage{graphicx,amsmath,booktabs,hyperref}
+\title{Bina.az Listing Price and Tier Prediction}
+\author{MLE-AI-201 Final Project V3\\[2pt]\small PegaSold: Emiliya Abdulhalimova, Aygun Asvarova, Murad Bagirzade, Kanan Karimli}
+\date{October 2026}
+\begin{document}\maketitle
+\begin{abstract}
+We implement a NumPy decision tree for log-price regression and median-tier classification, and a NumPy Pegasos SVM with a random Fourier feature alternative. Of 100,775 raw rows, 57,543 remain after normalized advert-ID deduplication, Baku residential scope selection, and declared domain bounds. The training-only tier cut is 208,000 AZN. The scratch tree test RMSE is 0.239 in log-price space (147,356 AZN); scratch tree and Pegasos test F1 are 0.923 and 0.903. Asking prices are not verified transactions.
+\end{abstract}
+\section{Data and preprocessing}
+The source contains Azerbaijani text fields, mixed missingness, repeat scrapes, and categories with different measurement units. The pipeline keeps Baku listings from the three residential categories. It normalizes numeric IDs from advert URLs and retains each ID's last dated scrape. Candidate reposts sharing coordinates, area, rooms, and price are reported but not deleted because the key does not establish that two ads describe one property. Fixed domain checks require price 10,000--5,000,000 AZN, area 10--2,000 m$^2$, unit price 200--20,000 AZN/m$^2$, plausible room counts, and valid stated floors. After splitting, a two-sided modified-z MAD fence is estimated from training `log(price)` only (cutoff 3.5) and applied only to training. All validation/test rows are retained, so the test metrics include outlier tails. The processed split is 40,033/8,632/8,632 (seed 42). Split allocation uses global-median price bins; the premium threshold is separately learned from the remaining training rows only.
 
-% ---- Geometry: IEEE-like margins / two narrow columns ----------------
-\usepackage[a4paper,top=0.75in,bottom=1.0in,left=0.68in,right=0.68in,columnsep=0.25in]{geometry}
+The 80-column matrix contains 20 continuous/binary features and one-hot category/location columns. Train-only medians fill rooms/coordinates; train-only population means/stds scale continuous features. IDs, free text, views, `unit\_price`, and `total\_price` are excluded from model inputs. The raw file is never overwritten.
+\begin{figure}[t]\centering\includegraphics[width=\linewidth]{../reports/figures/data_and_prices.png}\caption{Row counts through cleaning and training price distribution.}\end{figure}
+\section{Models and evaluation}
+The NumPy tree tests numeric threshold midpoints. Gini/entropy use cumulative class counts; regression uses variance/MSE reduction via cumulative sums and squared sums. Leaves predict a majority class or target mean. Depth and minimum leaf settings are chosen from validation evidence.
 
-% ---- Times-like font (standard, ships with every TeX distro) ---------
-\usepackage{mathptmx}          % Times text + math
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}    % allows accented / Azerbaijani chars
+Pegasos minimizes $J(w,b)=\frac{\lambda}{2}\|w\|^2+\frac{1}{n}\sum_i\max(0,1-y_i(w^Tx_i+b))$. It uses $\eta_t=1/(\lambda t)$, weight shrinkage, and hinge-loss subgradients. The intercept update is bounded by $\min(\eta_t,1)$ and is unregularized. The nonlinear option maps inputs to $\sqrt{2/D}\cos(xW+\phi)$ with 128 seeded random Fourier features. Library trees and SVMs are benchmark references; the course models remain project NumPy implementations.
 
-% ---- Common, dependency-free packages --------------------------------
-\usepackage{graphicx}
-\usepackage{amsmath,amssymb}
-\usepackage{booktabs}
-\usepackage{array}
-\usepackage{titlesec}
-\usepackage{caption}
-\usepackage{cite}
-\usepackage[hidelinks]{hyperref}
-\usepackage{url}
-
-% ---- IEEE-style section headings -------------------------------------
-\renewcommand{\thesection}{\Roman{section}}
-\renewcommand{\thesubsection}{\Alph{subsection}}
-\titleformat{\section}[block]{\centering\normalsize\scshape}{\thesection.}{0.5em}{}
-\titleformat{\subsection}[block]{\normalsize\itshape}{\thesubsection.}{0.5em}{}
-\titlespacing*{\section}{0pt}{1.4ex plus 1ex minus .2ex}{1ex}
-\titlespacing*{\subsection}{0pt}{1.0ex plus 1ex minus .2ex}{0.6ex}
-
-% ---- Abstract / Index-Terms in the IEEE boldface-dash style ----------
-\newcommand{\abstractkw}[1]{\noindent\textbf{\textit{#1}}}
-
-\captionsetup{font=small,labelsep=period}
-\setlength{\parindent}{1em}
-
-% =====================================================================
-\begin{document}
-
-% ------------------------- TITLE BLOCK --------------------------------
-\twocolumn[
-  \begin{@twocolumnfalse}
-  \begin{center}
-    {\LARGE\bfseries Your Project Title Here:\\A Clear, Specific Subtitle\par}
-    \vspace{1.2em}
-    % Authors: Surname, Given name --- alphabetical by surname.
-    {\large
-      Aliyeva, Aysel\quad Mammadov, Murad\quad Rustamli, Rustam\par}
-    \vspace{0.5em}
-    {\itshape MLE-AI-201 Machine Learning, AI Academy --- Cohort II\par}
-    \vspace{1.4em}
-  \end{center}
-  \begin{quote}
-    \small
-    \abstractkw{Abstract---}% IEEE uses an em-dash after "Abstract"
-    One paragraph, roughly 150--250 words. State the problem (price
-    prediction and the derived price-tier task on the bina.az dataset),
-    what you built from scratch (a decision tree and an SVM), the key
-    result (headline metrics vs.\ scikit-learn), and the main takeaway.
-    Write it last. \textbf{End the abstract with your repository link},
-    per IEEE convention:
-    \href{https://github.com/your-team/your-repo}{\texttt{github.com/your-team/your-repo}}
-    (tag \texttt{v1.0-final}).
-
-    \vspace{0.6em}
-    \abstractkw{Index Terms---}decision tree, support-vector machine,
-    Pegasos, regression, classification, real-estate price prediction.
-  \end{quote}
-  \vspace{1.0em}
-  \end{@twocolumnfalse}
-]
-
-% =====================================================================
-\section{Introduction}
-Motivate the problem and state your contributions as a short bulleted or
-inline list. What is the task, why does it matter, and what did your
-team do? Keep background brief; cite sources like this~\cite{pegasos}.
-
-\section{Related Work / Background}
-Briefly place your work in context: decision trees (impurity, information
-gain), the soft-margin SVM and the hinge-loss primal, and the Pegasos
-sub-gradient solver you used~\cite{pegasos}. One or two short paragraphs.
-
-\section{Data and Preprocessing}
-Describe the bina.az dataset: size, key columns, and the cleaning you
-did (currency, types, missing values, duplicates, outliers). State the
-two tasks (price regression; price-tier classification), how you derived
-the tier label, and your train/validation/test split. \textbf{Name the
-leakage columns you removed and why.}
-
-\begin{table}[t]
-  \centering
-  \caption{Dataset summary after cleaning.}
-  \label{tab:data}
-  \begin{tabular}{@{}lr@{}}
-    \toprule
-    Property & Value \\
-    \midrule
-    Rows (after cleaning)       & --- \\
-    Features used               & --- \\
-    Train / Val / Test split    & --- / --- / --- \\
-    Price-tier balance (\%)     & --- \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\section{Method}
-\subsection{Decision tree (from scratch)}
-Describe your impurity criteria (Gini / entropy / MSE reduction), the
-split search, recursion, leaf rule, and hyperparameters.
-
-\subsection{Support-vector machine (from scratch)}
-State the objective and the Pegasos update you implemented:
-\begin{equation}
-  J(\mathbf{w},b)=\tfrac{\lambda}{2}\lVert\mathbf{w}\rVert^{2}
-  +\tfrac{1}{n}\sum_{i=1}^{n}\max\!\big(0,\,1-y_i(\mathbf{w}^{\top}\mathbf{x}_i+b)\big).
-\end{equation}
-Explain the learning-rate schedule, feature scaling, and your non-linear
-extension (kernelised Pegasos or random Fourier features), if any.
-
-\section{Experimental Setup}
-Metrics (RMSE/MAE/$R^2$ for regression; precision/recall/F1/AUC for
-classification), hyperparameter search protocol, seeds, and the
-scikit-learn baselines you compared against (with matched settings).
-
-\section{Results}
-Lead with a results table; back every claim with a number or figure.
-
-\begin{table}[t]
-  \centering
-  \caption{Headline results (test set, mean $\pm$ std over folds).}
-  \label{tab:results}
-  \begin{tabular}{@{}lcc@{}}
-    \toprule
-    Model & Task A (RMSE) & Task B (F1) \\
-    \midrule
-    Ours: decision tree     & --- & --- \\
-    Ours: SVM (Pegasos)     & n/a & --- \\
-    scikit-learn baseline   & --- & --- \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\begin{figure}[t]
-  \centering
-  % \includegraphics[width=\linewidth]{figures/your_plot.pdf}
-  \fbox{\parbox[c][3.2cm][c]{0.9\linewidth}{\centering\small
-    Replace with a figure (e.g.\ validation curve, confusion matrix,
-    or feature importances). Save plots to \texttt{figures/}.}}
-  \caption{One clear figure beats ten decorative ones.}
-  \label{fig:main}
-\end{figure}
-
-\section{Discussion and Limitations}
-Where and why each model fails (luxury outliers, sparse districts,
-scaling effects), the bias--variance story, and honest limitations.
-
-\section{Conclusion}
-One short paragraph: what you found and what you would do next.
-
-\section*{Tools and Acknowledgements}
-Disclose any AI-assistant use and what it was used for, plus data/code
-you built on. (Required.)
-
-% =====================================================================
-\begin{thebibliography}{9}
-\bibitem{pegasos}
-S.~Shalev-Shwartz, Y.~Singer, N.~Srebro, and A.~Cotter,
-``Pegasos: primal estimated sub-gradient solver for SVM,''
-\emph{Mathematical Programming}, vol.~127, no.~1, pp.~3--30, 2011.
-\end{thebibliography}
-
+We select model settings on validation, then report the held-out test once. Five-fold CV uses all 40,033 post-cleaning training rows and reports fold mean and standard deviation; each fold trains on four fifths and validates on one fifth. Regression CV also reports AZN-space MAE. Shared feature preprocessing was fitted before fold creation, so it is not fully nested CV. Validation and test data are not part of CV. Regression metrics are reported in both $\ln(\mathrm{AZN})$ and AZN. Classification reports accuracy, precision, recall, F1, ROC-AUC and confusion matrices.
+\section{Held-out results}
+\begin{table}[h]\centering\small\begin{tabular}{lrrr}\toprule Model & RMSE log & RMSE AZN & $R^2$ AZN\\\midrule
+Scratch tree & 0.239 & 147,356 & 0.652\\
+sklearn tree & 0.239 & 147,683 & 0.650\\\bottomrule\end{tabular}\caption{Held-out Task A results.}\end{table}
+\begin{table}[h]\centering\small\begin{tabular}{lrrr}\toprule Model & Accuracy & F1 & ROC-AUC\\\midrule
+Scratch tree & 0.922 & 0.923 & 0.958\\
+sklearn tree & 0.922 & 0.923 & 0.959\\
+Pegasos & 0.902 & 0.903 & 0.968\\\bottomrule\end{tabular}\caption{Held-out Task B results.}\end{table}
+\begin{figure}[t]\centering\includegraphics[width=\linewidth]{../reports/figures/tree_tuning.png}\caption{Validation-based tree sweeps.}\end{figure}
+\begin{figure}[t]\centering\includegraphics[width=\linewidth]{../reports/figures/regression_error_analysis.png}\caption{Predictions and residual analysis.}\end{figure}
+\begin{figure}[t]\centering\includegraphics[width=\linewidth]{../reports/figures/roc_curves.png}\caption{ROC curves on held-out rows.}\end{figure}
+\section{Limitations}
+The target is advertised price rather than transaction price; the data are a 2024 scrape and do not describe today's market. Fixed value bounds were selected after full-source EDA. Ambiguous duplicate advertisements under different IDs may remain. CV shares preprocessing learned before folds. Impurity importance/correlation are descriptive rather than causal. Log-space prediction transformed with an exponential does not include a smearing correction for arithmetic conditional means.
+\section*{AI-assistance disclosure}
+AI assisted with coding suggestions, debugging, corrections, review, tests, visualizations, and documentation. The team is responsible for checking the final code and results. The decision tree and Pegasos algorithms are implemented in project NumPy code; scikit-learn supplies comparison models and standard utilities.
 \end{document}
