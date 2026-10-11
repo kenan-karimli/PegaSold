@@ -22,13 +22,13 @@ Builds a typeset two-column summary using the same raw/clean counts, feature cou
 
 The output LaTeX source is saved as `report/report.tex`. When `pdflatex` exists, the function compiles twice in a temporary folder so references settle, then copies only the PDF into `report/`. On failure it records the build detail in `report/latex_build_error.txt`; the Markdown and `.tex` sources remain available.
 
-## `_slides(results,slide_dir)`
+## `_slides_madrid(results,slide_dir,figures)`
 
-The f-string Beamer document has 15 frames in the report's order. It reads metrics and hyperparameters dynamically from `results`: it must not retain old screenshot-era scores. The title includes the four team names; later slides contain no member names. Content covers tasks, data source, cleaning, features/splits, NumPy decision tree, linear Pegasos, random Fourier features, benchmark design, both held-out tasks, validation/learning curves, feature/error analysis, limitations, and reproducibility.
+This function builds the current 15-frame, 16:9 Beamer presentation from live result values, following the supplied Madrid example. It follows the report order: task and data, cleaning, features, the NumPy tree, regression errors, linear/nonlinear Pegasos, cross-validation, held-out comparisons, interpretation, limitations, and reproducibility. The four member names appear on the title page only; speaker labels identify presentation parts on relevant slides.
 
-The theme keeps the presentation's sans-serif typography, white editorial canvas, deep Colombian blue, yellow and red flag-inspired accents, and full-width footer bar with project identity and slide number. Image heights are constrained per frame to keep plot axes and captions above the footer. Figures come from the same `reports/figures` folder as the report. The compiled PDF is regenerated beside `slides.tex`.
+The visual system uses the standard Madrid theme: white canvas, blue headings and structure, and the theme's built-in bottom navigation/footer panel with project identity and page number. Plots use the original `reports/figures` assets and are sized to fit beside the text or inside the result frame. The custom `presentation` class and XeLaTeX are not available in the project environment, so the generator uses standard Beamer and pdfLaTeX with the supplied template's 16:9 layout and Madrid theme.
 
-The same temporary-build pattern compiles twice and retains only the PDF; errors are written to `presentation/latex_build_error.txt`. `write_reports()` calls Markdown, LaTeX, and slides in that order after `run_all` has written plots and result JSON.
+Compilation runs twice in a temporary directory and retains the PDF beside `slides.tex`; errors are written to `presentation/latex_build_error.txt`. `write_reports()` calls Markdown, LaTeX, and the presentation generator after `run_all` has written plots and result JSON.
 
 ## Accuracy and maintenance checks
 

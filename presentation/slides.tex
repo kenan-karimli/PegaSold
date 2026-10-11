@@ -1,79 +1,69 @@
 \documentclass[aspectratio=169]{beamer}
 \usetheme{Madrid}
 \usepackage{graphicx,booktabs,array}
-\definecolor{PegaBlue}{HTML}{003893}
-\definecolor{PegaYellow}{HTML}{FCD116}
-\definecolor{PegaRed}{HTML}{CE1126}
-\setbeamercolor{structure}{fg=PegaBlue}
-\setbeamercolor{frametitle}{fg=PegaBlue,bg=white}
-\setbeamercolor{title}{fg=white,bg=PegaBlue}
-\setbeamercolor{block title}{fg=white,bg=PegaBlue}
-\setbeamercolor{block body}{fg=black,bg=blue!4}
-\setbeamertemplate{navigation symbols}{}
-\setbeamertemplate{itemize item}{\color{PegaRed}\small$\blacktriangleright$}
-\setbeamertemplate{footline}{%
-  \leavevmode\hbox to \paperwidth{\color{PegaYellow}\rule{.50\paperwidth}{2pt}\color{PegaBlue}\rule{.25\paperwidth}{2pt}\color{PegaRed}\rule{.25\paperwidth}{2pt}}\par\nointerlineskip
-  \hbox{\begin{beamercolorbox}[wd=.82\paperwidth,ht=2.6ex,dp=1ex,leftskip=1em]{author in head/foot}\color{white}PegaSold\hfill MLE-AI-201 · Bina.az Housing Price Prediction\end{beamercolorbox}\begin{beamercolorbox}[wd=.18\paperwidth,ht=2.6ex,dp=1ex,center]{date in head/foot}\color{white}\insertframenumber/\inserttotalframenumber\end{beamercolorbox}}}
-\setbeamercolor{author in head/foot}{bg=PegaBlue}
-\setbeamercolor{date in head/foot}{bg=PegaBlue}
 \title[Bina.az Price Prediction]{Bina.az Housing Price Prediction}
 \subtitle{From-scratch decision trees and Pegasos SVM}
-\author[PegaSold]{MLE-AI-201 Final Project V3\\[.4em]PegaSold\\[.25em]Emiliya Abdulhalimova · Aygun Asvarova · Murad Bagirzade · Kanan Karimli}
-\date{October 2026}
+\author[PegaSold]{PegaSold\\[.35em]Emiliya Abdulhalimova · Aygun Asvarova · Murad Bagirzade · Kanan Karimli}
+\institute[MLE-AI-201]{MLE-AI-201 Final Project V3 · National AI Center}
+\date[Oct 2026]{October 2026}
 \begin{document}
 \begin{frame}\titlepage\end{frame}
+\section{Project and data}
 \begin{frame}{Project question — Speaker 1: data and task}
 \begin{itemize}
-\item Bina.az asking-price scrape: 100,775 raw rows; October–November 2024 records.
-\item Task A predicts $\ln(\mathrm{price})$; errors are reported in log space and AZN.
-\item Task B predicts standard/premium; the train-only median cutoff is 208,000 AZN.
-\item Decision tree and Pegasos training are NumPy implementations; sklearn supplies comparison baselines.
+\item Real Bina.az asking-price scrape: 100,775 raw rows from October–November 2024.
+\item Task A predicts $\ln(\mathrm{price})$; we report log-space and AZN-space errors.
+\item Task B classifies standard vs premium; the training median cutoff is 208,000 AZN.
+\item The decision tree and Pegasos are NumPy implementations; sklearn is used as a comparison reference.
 \end{itemize}
 \end{frame}
-\begin{frame}{Cleaning and leakage control — Speaker 1}
+\begin{frame}{Cleaning and leakage — Speaker 1}
 \small
 \begin{columns}[T]\column{.47\textwidth}
 \begin{itemize}
-\item Normalize advert URLs to numeric IDs; keep each advert's latest scrape.
-\item Keep Baku's three residential categories; fixed bounds check price, floor area, AZN/m$^2$, rooms and floors.
-\item Train-derived log-price MAD fence: 26,130--1,671,651 AZN; removed 246 from train only.
-\item Splits after train filtering: 40,033/8,632/8,632; validation/test retain all rows.
-\item Exclude target-derived values, IDs, free text, owner/agency fields and raw address.
-\item Imputation, scaling and location vocabulary are fitted on train; raw CSV stays unchanged.
+\item Keep the latest scrape per normalized advert ID; retain Baku residential listings.
+\item Apply declared price, area, AZN/m$^2$, room and floor checks.
+\item Train-only log-price MAD fence: 26,130–1,671,651 AZN; removed 246 train rows only.
+\item Split: 40,033/8,632/8,632; validation/test rows remain intact.
+\item Exclude target-derived prices, free text, identifiers, seller fields and raw address.
+\item Fit imputation, scaling and category vocabulary from training rows.
 \end{itemize}
-\column{.53\textwidth}\centering\includegraphics[width=\linewidth,height=.77\textheight,keepaspectratio]{../reports/figures/data_and_prices.png}\end{columns}
+\column{.53\textwidth}\centering\includegraphics[width=\linewidth,height=.74\textheight,keepaspectratio]{../reports/figures/data_and_prices.png}\end{columns}
 \end{frame}
 \begin{frame}{Exploration and feature design — Speaker 1}
 \small
-\begin{columns}[T]\column{.48\textwidth}
+\begin{columns}[T]\column{.47\textwidth}
 \begin{itemize}
-\item Raw EDA measures missingness, repeat scrapes, leakage candidates, categories, geography and price tails.
-\item Parse Azerbaijani numeric strings; represent yes/no flags as 0/1 and invalid coordinates as missing.
-\item Use log area/land, location/type indicators and engineered distance/floor/area ratios.
-\item EDA describes this 2024 scrape; it is not causal evidence or today's market estimate.
+\item Parse Azerbaijani measurements; encode flags as 0/1.
+\item Use area, rooms, floor, land, coordinates, category and frequent locations.
+\item Engineer distance to centre, floor ratio, area per room and land ratio.
+\item Spatial and property-type patterns provide signal, not causal proof.
+\item This is a historical asking-price scrape, not transaction data.
 \end{itemize}
-\column{.50\textwidth}\centering\includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]{../reports/figures/price_vs_area.png}\end{columns}
+\column{.51\textwidth}\centering\includegraphics[width=\linewidth,height=.73\textheight,keepaspectratio]{../reports/figures/price_vs_area.png}\end{columns}
 \end{frame}
-\begin{frame}{Split, targets, and validation protocol — Speaker 1}
+\begin{frame}{Split protocol and cross-validation — Speaker 1}
 \begin{itemize}
-\item Seed 42: 40,033 train, 8,632 validation, 8,632 test rows.
-\item Repeated advert IDs are kept in one partition; split allocation balances price bins.
-\item Premium threshold is independently learned from training prices only: 208,000 AZN.
-\item Select hyperparameters on validation, refit on train, and evaluate test after selection.
-\item Five-fold CV uses all 40,033 training rows; shared preprocessing precedes folds, so CV is not fully nested.
+\item Fixed seed; split allocation balances price bins and keeps repeated advert IDs together.
+\item Premium threshold is computed from training prices only: 208,000 AZN.
+\item Validation chooses hyperparameters; the held-out test is used after selection.
+\item Five-fold CV uses all 40,033 training rows (about 32k fit / 8k validation per fold).
+\item Preprocessing statistics were fitted before folds; CV is indicative, not fully nested.
 \end{itemize}
 \end{frame}
+\section{Models}
 \begin{frame}{Decision tree from scratch — Speaker 2}
 \small
-\begin{columns}[T]\column{.49\textwidth}
+\begin{columns}[T]\column{.48\textwidth}
 \begin{itemize}
-\item Sort numeric values and evaluate boundaries between distinct adjacent values.
-\item Cumulative class counts compute Gini/entropy gain; target sums and squared sums compute MSE reduction.
-\item Recurse on the best legal split; leaves predict majority class or mean target.
-\item Depth, minimum leaf and split constraints control model growth.
-\item Importance sums sample-weighted impurity decreases; it does not establish causation.
+\item Sort numeric values and test boundaries between distinct adjacent values.
+\item Classification: Gini/entropy information gain; regression: MSE reduction.
+\item Cumulative counts and sums make split scoring efficient.
+\item Leaves predict majority class or mean target.
+\item Depth and minimum-leaf limits control model variance.
+\item Validation selects criterion, depth and leaf size; test remains untouched.
 \end{itemize}
-\column{.49\textwidth}\centering\includegraphics[width=\linewidth,height=.73\textheight,keepaspectratio]{../reports/figures/decision_tree.png}\end{columns}
+\column{.50\textwidth}\centering\includegraphics[width=\linewidth,height=.71\textheight,keepaspectratio]{../reports/figures/tree_tuning.png}\end{columns}
 \end{frame}
 \begin{frame}{Tree results and generalization — Speaker 2}
 \centering\small
@@ -81,61 +71,60 @@
 \toprule Metric & Score & Metric & Score\\\midrule
 Task A log RMSE & 0.239 & Task B accuracy & 0.922\\
 Task A AZN RMSE & 147,356 & Task B F1 / AUC & 0.923 / 0.958\\
-Reference tree log RMSE & 0.239 & Reference accuracy & 0.922\\
+Reference log RMSE & 0.239 & Reference accuracy & 0.922\\
 \bottomrule\end{tabular*}
-\vspace{.15cm}\includegraphics[width=.88\linewidth,height=.53\textheight,keepaspectratio]{../reports/figures/tree_learning_curves.png}
+\vspace{.15cm}\includegraphics[width=.89\linewidth,height=.51\textheight,keepaspectratio]{../reports/figures/tree_learning_curves.png}
 \end{frame}
-\begin{frame}{Interpreting the tree's AZN price error — Speaker 2}
+\begin{frame}{Regression error in AZN — Speaker 2}
 \small
-\begin{columns}[T]
-\column{.43\textwidth}
+\begin{columns}[T]\column{.43\textwidth}
 \begin{itemize}
-\item The tree learns mean squared error on $\ln(\mathrm{price})$, then exponentiates its output to AZN.
-\item Test MAE: 47,613 AZN (average); median absolute error: 16,431 AZN.
-\item Test RMSE: 147,356 AZN; maximum absolute error: 3,760,714 AZN.
-\item The maximum test error is 3,760,714 AZN: one 5,000,000 AZN home was estimated at 1,239,286 AZN.
-\item Validation/test retain prices outside the fence; luxury-tail errors remain large and visible.
-\item This is a historical asking-price estimate, not a transaction appraisal.
+\item Held-out test MAE: 47,613 AZN; median absolute error: 16,431 AZN.
+\item Test RMSE: 147,356 AZN.
+\item Largest absolute error: 3,760,714 AZN.
+\item Actual 5,000,000 AZN; predicted 1,239,286 AZN.
+\item Test retains extreme prices outside the training MAD fence.
 \end{itemize}
-\column{.55\textwidth}\centering
-\includegraphics[width=\linewidth,height=.72\textheight,keepaspectratio]{../reports/figures/regression_error_analysis.png}
-\end{columns}
+\column{.55\textwidth}\centering\includegraphics[width=\linewidth,height=.73\textheight,keepaspectratio]{../reports/figures/regression_error_analysis.png}\end{columns}
 \end{frame}
 \begin{frame}{Linear Pegasos SVM — Speaker 3}
 \small
-\begin{columns}[T]\column{.53\textwidth}
+\begin{columns}[T]\column{.50\textwidth}
 \begin{itemize}
-\item Minimize $\lambda\|w\|^2/2+$ mean hinge loss using stochastic subgradient updates.
-\item Standardize from training data; labels map to $-1,+1$ internally.
-\item Selected $\lambda=0.01$; margin width $2/\|w\|=0.9001$.
+\item Minimize regularized hinge loss with stochastic sub-gradient updates.
+\item Standardize using training data; labels map to $-1,+1$.
+\item Selected $\lambda=0.01$; margin width $2/\|w\|=0.900$.
 \item Support vectors (signed margin $\leq1$): 11,587 training rows.
-\item Test: accuracy 0.902, F1 0.903, ROC-AUC 0.968.
+\item Test accuracy 0.902; F1 0.903; ROC-AUC 0.968.
 \end{itemize}
-\column{.47\textwidth}\centering\includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]{../reports/figures/pegasos_objective.png}\end{columns}
+\column{.48\textwidth}\centering\includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]{../reports/figures/pegasos_objective.png}\end{columns}
 \end{frame}
 \begin{frame}{Nonlinear SVM and decision margin — Speaker 3}
 \small
 \begin{columns}[T]\column{.48\textwidth}
 \begin{itemize}
-\item Random Fourier Features use seeded cosine projections to approximate an RBF kernel; NumPy Pegasos trains the mapped features.
-\item 128 components; selected $\gamma=0.01$; tuned on an 8,000-row training subset.
-\item RFF test: accuracy 0.790, F1 0.786, AUC 0.875.
-\item Linear model performed better on this dataset/run; nonlinear mapping did not guarantee a gain.
+\item Seeded Random Fourier Features approximate an RBF kernel; the NumPy Pegasos optimizer trains the mapped features.
+\item 128 components; selected $\gamma=0.01$; training subset 8,000.
+\item Matched RBF SVC uses the same subset; results depend on random features and seed.
+\item Nonlinear mapping did not outperform the linear model in this run.
 \end{itemize}
-\column{.50\textwidth}\centering\includegraphics[width=\linewidth,height=.75\textheight,keepaspectratio]{../reports/figures/svm_margin_scores.png}\end{columns}
+\column{.50\textwidth}\centering\includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]{../reports/figures/svm_margin_scores.png}\end{columns}
 \end{frame}
+\section{Evaluation and findings}
 \begin{frame}{Fair comparison and uncertainty — Speaker 4}
 \small
-\begin{columns}[T]\column{.50\textwidth}
+\begin{columns}[T]\column{.49\textwidth}
 \begin{itemize}
-\item Tree references use matching criteria/depth/leaf settings on the same input matrix.
-\item LinearSVC uses hinge loss, train-only scaling pipeline and objective-matched $C=1/(\lambda n)$.
-\item Five-fold CV is on a seeded train sample; report means and standard deviations.
-\item Test metrics are held out once; test results do not drive model selection.
+\item Tree references use matched criteria, depth and leaf settings.
+\item LinearSVC uses hinge loss, fold-local scaling and objective-matched $C=1/(\lambda n)$.
+\item Five-fold CV covers all 40,033 training rows.
+\item Regression tree CV MAE: 41,505 $\pm$ 675 AZN.
+\item sklearn tree CV MAE: 41,516 $\pm$ 696 AZN.
+\item CV MAE is lower partly because filtered folds do not contain the test's full extreme-price tail.
 \end{itemize}
-\column{.48\textwidth}\centering\includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]{../reports/figures/roc_curves.png}\end{columns}
+\column{.49\textwidth}\centering\includegraphics[width=\linewidth,height=.74\textheight,keepaspectratio]{../reports/figures/roc_curves.png}\end{columns}
 \end{frame}
-\begin{frame}{Held-out classification comparison — Speaker 4}
+\begin{frame}{Held-out test comparison — Speaker 4}
 \scriptsize
 \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lrrrr}
 \toprule Model & Accuracy & F1 & AUC & Fit sec\\\midrule
@@ -145,39 +134,34 @@ Pegasos & 0.902 & 0.903 & 0.968 & 2.81\\
 LinearSVC & 0.902 & 0.903 & 0.968 & 0.48\\
 RFF Pegasos & 0.790 & 0.786 & 0.875 & 0.82\\
 \bottomrule\end{tabular*}
-\vspace{.18cm}\begin{columns}\column{.5\textwidth}\includegraphics[width=\linewidth,height=.53\textheight,keepaspectratio]{../reports/figures/classification_comparison.png}\column{.5\textwidth}\includegraphics[width=\linewidth,height=.53\textheight,keepaspectratio]{../reports/figures/regression_error_analysis.png}\end{columns}
+\vspace{.18cm}\begin{columns}\column{.5\textwidth}\includegraphics[width=\linewidth,height=.52\textheight,keepaspectratio]{../reports/figures/classification_comparison.png}\column{.5\textwidth}\includegraphics[width=\linewidth,height=.52\textheight,keepaspectratio]{../reports/figures/regression_error_analysis.png}\end{columns}
 \end{frame}
-\begin{frame}{Validation sweeps and model interpretation — Speaker 4}
-\begin{columns}[T]\column{.50\textwidth}\centering\includegraphics[width=\linewidth,height=.65\textheight,keepaspectratio]{../reports/figures/tree_tuning.png}\\Validation parameter sweeps.
-\column{.48\textwidth}\centering\includegraphics[width=\linewidth,height=.65\textheight,keepaspectratio]{../reports/figures/feature_importance_regression.png}\\Regression tree importance.
+\begin{frame}{Tuning and feature importance — Speaker 4}
+\begin{columns}[T]\column{.49\textwidth}\centering\includegraphics[width=\linewidth,height=.72\textheight,keepaspectratio]{../reports/figures/tree_tuning.png}\\Validation sweeps.
+\column{.49\textwidth}\centering\includegraphics[width=\linewidth,height=.72\textheight,keepaspectratio]{../reports/figures/feature_importance_regression.png}\\Impurity importance is descriptive, not causal.
 \end{columns}
-\small Validation chooses settings; importance measures split utility and is not causal evidence.
 \end{frame}
 \begin{frame}{Conclusions and limitations — All}
 \begin{itemize}
-\item Median price-tier classification is easier than exact advertised-price prediction; AZN error exposes expensive-property misses.
-\item Asking prices are not verified transaction prices; one 2024 scrape is not today's market.
-\item Fixed cleaning bounds were chosen after source EDA; ambiguous cross-ID duplicate candidates may remain.
-\item Sparse locations and the non-nested CV preprocessing can limit generalization claims.
-\item Reproduce with \texttt{python -m src.run\_all}; full results and caveats are in \texttt{reports/final\_report.md}.
+\item Price-tier classification is easier than exact advertised-price prediction; luxury-tail errors remain large.
+\item Scratch and sklearn trees are close under matched settings.
+\item The held-out test MAE is 47,613 AZN; CV mean does not replace this result.
+\item Asking prices are not verified transactions; one 2024 scrape is not today's market.
+\item CV preprocessing precedes folds; ambiguous cross-ID duplicates may remain.
 \end{itemize}
 \end{frame}
-\begin{frame}{Reproducibility and four-part handoff — All}
+\begin{frame}{Reproducibility and handoff — All}
 \small
-\begin{columns}[T]\column{.55\textwidth}
 \begin{enumerate}
-\item Speaker 1: raw EDA, cleaning, targets, splits and leakage checks.
-\item Speaker 2: NumPy decision tree, criteria, tuning and tree results.
-\item Speaker 3: Pegasos, RFF mapping, margin and SVM findings.
-\item Speaker 4: baselines, cross-validation, metrics, error analysis and reproducibility.
+\item Speaker 1: data preparation, EDA, feature design and split protocol.
+\item Speaker 2: NumPy tree, validation tuning and regression error analysis.
+\item Speaker 3: Pegasos optimization, margin and nonlinear RFF model.
+\item Speaker 4: sklearn benchmarks, CV, metrics and reproducibility.
 \end{enumerate}
-\column{.42\textwidth}
-\begin{block}{Run and verify}
-\texttt{python -m src.run\_all}\\
-\texttt{pytest -q}\\[.4em]
-The automated test summary and outputs are in \texttt{reports/} and \texttt{data/processed/}.
+\begin{block}{Reproduce}
+\texttt{python -m src.run\_all}\qquad\texttt{pytest -q}\\
+Results, figures and caveats: \texttt{reports/final\_report.md}.
 \end{block}
-\end{columns}
-AI-assisted coding suggestions, debugging, corrections and review were used; the team checked the final code and results.
+AI assistance was used for coding suggestions, debugging, corrections and review; the team checked the final code and results.
 \end{frame}
 \end{document}

@@ -1,0 +1,81 @@
+feature
+log_area_m2
+log_land_m2
+rooms
+lat
+lng
+floor
+n_floors
+distance_to_centre_km
+floor_ratio
+is_ground_floor
+is_top_floor
+area_per_room
+log_land_ratio
+has_floor_info
+has_repair
+has_bill_of_sale
+has_mortgage
+is_vip
+is_featured
+sold_by_owner
+category=Yeni tikili
+category=Köhnə tikili
+category=Həyət evi/Bağ evi
+location=20 Yanvar m.
+location=28 May m.
+location=7-ci mikrorayon q.
+location=8 Noyabr m.
+location=8-ci mikrorayon q.
+location=9-cu mikrorayon q.
+location=Abşeron r.
+location=Avtovağzal m.
+location=Azadlıq Prospekti m.
+location=Ağ şəhər q.
+location=Badamdar q.
+location=Bakıxanov q.
+location=Bayıl q.
+location=Biləcəri q.
+location=Binə q.
+location=Binəqədi q.
+location=Binəqədi r.
+location=Buzovna q.
+location=Dərnəgül m.
+location=Elmlər Akademiyası m.
+location=Gənclik m.
+location=Hövsan q.
+location=Həzi Aslanov m.
+location=Həzi Aslanov q.
+location=Koroğlu m.
+location=Köhnə Günəşli q.
+location=Masazır q.
+location=Maştağa q.
+location=Mehdiabad q.
+location=Memar Əcəmi m.
+location=Mərdəkan q.
+location=Nardaran q.
+location=Neftçilər m.
+location=Nizami m.
+location=Nizami r.
+location=Novxanı q.
+location=Nəriman Nərimanov m.
+location=Nərimanov r.
+location=Nəsimi m.
+location=Nəsimi r.
+location=Qara Qarayev m.
+location=Qaraçuxur q.
+location=Sahil m.
+location=Səbail r.
+location=Xalqlar Dostluğu m.
+location=Xətai r.
+location=Yasamal q.
+location=Yasamal r.
+location=Yeni Günəşli q.
+location=Yeni Yasamal q.
+location=İnşaatçılar m.
+location=İçəri Şəhər m.
+location=Şah İsmayıl Xətai m.
+location=Şüvəlan q.
+location=Əhmədli m.
+location=Əhmədli q.
+location=other

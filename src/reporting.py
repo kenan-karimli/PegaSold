@@ -222,346 +222,79 @@ AI assisted with coding suggestions, debugging, corrections, review, tests, visu
         (report_dir / "latex_build_error.txt").write_text(detail, encoding="utf-8")
 
 
-def _slides(results, slide_dir):
-    t = results["test_results"]
-    r, c, s = t["decision_tree_regression"], t["decision_tree_classification"], t["pegasos_svm"]
-    sr, sc = t["sklearn_tree_regression"], t["sklearn_tree_classification"]
-    body = rf'''\documentclass[aspectratio=169]{{beamer}}
-\usetheme{{default}}
-\usepackage{{graphicx,booktabs,array}}
-\definecolor{{PegaNavy}}{{HTML}}{{003893}}
-\definecolor{{PegaLime}}{{HTML}}{{FCD116}}
-\definecolor{{PegaRed}}{{HTML}}{{CE1126}}
-\definecolor{{PegaMist}}{{HTML}}{{F4F7FC}}
-\setbeamercolor{{normal text}}{{fg=PegaNavy,bg=white}}
-\setbeamercolor{{structure}}{{fg=PegaNavy}}
-\setbeamercolor{{frametitle}}{{fg=PegaNavy,bg=white}}
-\setbeamercolor{{title}}{{fg=white,bg=PegaNavy}}
-\setbeamercolor{{block title}}{{fg=white,bg=PegaNavy}}
-\setbeamercolor{{block body}}{{fg=PegaNavy,bg=PegaMist}}
-\setbeamertemplate{{navigation symbols}}{{}}
-\setbeamertemplate{{headline}}{{}}
-\setbeamertemplate{{itemize item}}{{\color{{PegaRed}}\raisebox{{.15ex}}{{\tiny\rule{{.7ex}}{{.7ex}}}}}}
-\setbeamertemplate{{itemize subitem}}{{\color{{PegaNavy}}\scriptsize$\bullet$}}
-\setbeamertemplate{{footline}}{{%
-  \leavevmode\hbox to \paperwidth{{\color{{PegaLime}}\rule{{.18\paperwidth}}{{1.4pt}}\color{{PegaNavy}}\rule{{.68\paperwidth}}{{1.4pt}}\color{{PegaRed}}\rule{{.14\paperwidth}}{{1.4pt}}}}\par\nointerlineskip
-  \leavevmode\hbox{{%
-  \begin{{beamercolorbox}}[wd=.22\paperwidth,ht=2.8ex,dp=1.1ex,leftskip=1em]{{author in head/foot}}\color{{white}}\bfseries PegaSold\end{{beamercolorbox}}%
-  \begin{{beamercolorbox}}[wd=.64\paperwidth,ht=2.8ex,dp=1.1ex,center]{{title in head/foot}}\color{{white}}MLE-AI-201  ·  Bina.az listing project\end{{beamercolorbox}}%
-  \begin{{beamercolorbox}}[wd=.14\paperwidth,ht=2.8ex,dp=1.1ex,rightskip=1em plus 1fil]{{date in head/foot}}\color{{white}}\insertframenumber/\inserttotalframenumber\end{{beamercolorbox}}}}
-  \vskip0pt}}
-\setbeamercolor{{author in head/foot}}{{bg=PegaNavy}}
-\setbeamercolor{{title in head/foot}}{{bg=PegaNavy}}
-\setbeamercolor{{date in head/foot}}{{bg=PegaNavy}}
-\setbeamertemplate{{frametitle}}{{\vspace{{.2em}}\insertframetitle\par\vspace{{.15em}}\color{{PegaLime}}\rule{{\textwidth}}{{1.2pt}}\vspace{{.25em}}}}
-\setlength{{\leftmargini}}{{1.3em}}
-\title{{Bina.az Housing Price Prediction}}
-\subtitle{{NumPy decision trees and Pegasos SVM}}
-\author[PegaSold]{{PegaSold\\[.7em]Emiliya Abdulhalimova · Aygun Asvarova · Murad Bagirzade · Kanan Karimli}}
-\date{{October 2026}}
-\begin{{document}}
-\begin{{frame}}
-\vspace*{{.7cm}}
-\begin{{beamercolorbox}}[wd=\textwidth,sep=1.2em,center,rounded=true]{{title}}
-{{\LARGE\inserttitle\par}}\vspace{{.35em}}{{\large\insertsubtitle\par}}
-\end{{beamercolorbox}}
-\vspace{{1.1cm}}{{\large\bfseries PegaSold\par}}
-\vspace{{.25cm}}{{\normalsize Emiliya Abdulhalimova · Aygun Asvarova · Murad Bagirzade · Kanan Karimli\par}}
-\vfill{{\large\insertdate\par}}\vspace{{.5cm}}
-\end{{frame}}
-\begin{{frame}}{{Project summary and learning tasks}}
-\begin{{columns}}\begin{{column}}{{.61\textwidth}}
-\begin{{block}}{{Task A — regression}}
-Predict advertised sale price as $\ln(\mathrm{{price}})$. Report log-scale and AZN-scale errors; these measure proportional and currency error respectively.
-\end{{block}}
-\begin{{block}}{{Task B — binary classification}}
-Predict standard vs premium. Premium means price at or above the training-only median ({results['tier_threshold_AZN']:,.0f} AZN).
-\end{{block}}
-\end{{column}}\begin{{column}}{{.35\textwidth}}
-\centering\Large\textbf{{{results['data_audit']['raw_rows']:,}}}\\[-.1em]\normalsize raw rows\\[.8em]
-\Large\textbf{{{results['data_audit']['final_rows']:,}}}\\[-.1em]\normalsize clean listings\\[.8em]
-\Large\textbf{{{results['feature_count']}}}\\[-.1em]\normalsize feature columns
-\end{{column}}\end{{columns}}
-\vfill
-\small Models built from NumPy; scikit-learn supplies matched references and standard utilities.
-\end{{frame}}
-\begin{{frame}}{{Dataset and source exploration}}
-\begin{{columns}}\begin{{column}}{{.45\textwidth}}
-\begin{{itemize}}
-\item Real Bina.az sale-listing scrape; source snapshot is from October 2024.
-\item Raw fields mix Azerbaijani text, numeric strings, currencies, categories, locations, and repeated scrapes.
-\item The EDA inventories missingness, categories, duplicates, leakage candidates, and price quantiles.
-\item Raw exploration is descriptive only; it does not choose model settings.
-\end{{itemize}}
-\end{{column}}\begin{{column}}{{.52\textwidth}}
-\centering\includegraphics[width=\linewidth,height=4.4cm,keepaspectratio]{{../reports/eda/figures/fig01_missing_values.png}}
-\end{{column}}\end{{columns}}
-\end{{frame}}
-\begin{{frame}}{{Cleaning, deduplication, and leakage control}}
-\small
-\begin{{columns}}\begin{{column}}{{.47\textwidth}}
-\begin{{itemize}}
-\item Sort repeated listing URLs by scrape time and retain the latest row before splitting.
-\item Keep Baku residential types; apply declared price/area/price-per-m² and room/floor bounds.
-\item Invalid coordinates become missing and are imputed from training rows, not used to drop a listing.
-\item Final data: {results['data_audit']['final_rows']:,} listings; raw CSV is never overwritten.
-\item Exclude price-derived fields, IDs, free text, owner/shop names, and raw address.
-\end{{itemize}}
-\end{{column}}\begin{{column}}{{.49\textwidth}}
-\centering\includegraphics[width=\linewidth,height=4.3cm,keepaspectratio]{{../reports/figures/data_and_prices.png}}
-\end{{column}}\end{{columns}}
-\end{{frame}}
-\begin{{frame}}{{Features, split, and exploratory patterns}}
-\small
-\begin{{columns}}\begin{{column}}{{.51\textwidth}}
-\begin{{itemize}}
-\item Numeric: area, rooms, floors, land, coordinates, engineered distance/ratios, and property flags.
-\item Categories: property type, location, and repair state; one-hot vocabulary is learned from train.
-\item Impute, standardize, and learn frequent location columns from train only; rare/unseen locations map to `other`.
-\item Seed {results['seed']}; split {results['split']['train']:,}/{results['split']['validation']:,}/{results['split']['test']:,} (70/15/15).
-\item Training median defines the premium threshold; validation and test do not define it.
-\item Area and room count show positive price associations; location differences are descriptive, not causal.
-\end{{itemize}}
-\end{{column}}\begin{{column}}{{.47\textwidth}}
-\centering\includegraphics[width=\linewidth,height=4.4cm,keepaspectratio]{{../reports/figures/price_vs_area.png}}
-\par\scriptsize Price and area on log axes.
-\end{{column}}\end{{columns}}
-\vspace{{.2em}}\small The long price tail motivates log-price fitting; AZN metrics still expose currency-scale errors.
-\end{{frame}}
-\begin{{frame}}{{Decision tree: split search from first principles}}
-\begin{{columns}}\begin{{column}}{{.52\textwidth}}
-\begin{{itemize}}
-\item Sort each numeric feature and test boundaries between distinct values.
-\item Cumulative class counts give Gini/entropy gains; cumulative sums and squared sums give MSE reduction.
-\item Recurse on the best legal split; leaves predict a majority label or mean target.
-\item Stop on depth, sample/leaf constraints, pure targets, or no positive gain.
-\item Importance sums sample-weighted impurity decrease.
-\end{{itemize}}
-\end{{column}}\begin{{column}}{{.43\textwidth}}
-\centering\includegraphics[width=\linewidth,height=4.25cm,keepaspectratio]{{../reports/figures/decision_tree.png}}
-\end{{column}}\end{{columns}}
-\end{{frame}}
-\begin{{frame}}{{Linear Pegasos: objective, updates, and margin}}
-\small
-\begin{{columns}}\begin{{column}}{{.53\textwidth}}
-\begin{{block}}{{Objective}}
-$J(w,b)=\frac{{\lambda}}{{2}}\|w\|^2+\frac{{1}}{{n}}\sum_i\max(0,1-y_i(w^Tx_i+b))$, where $y_i\in\{{-1,+1\}}$.
-\end{{block}}
-\begin{{itemize}}
-\item Standardize features from training rows; shuffle examples each epoch.
-\item Use $\eta_t=1/(\lambda t)$; shrink weights, then add a hinge-loss subgradient for margin violations.
-\item The intercept is unregularized and its per-update step is bounded for stability.
-\item Margin width $2/\|w\|={s['margin_width']:.4f}$; {s['support_vector_count']:,} training points lie on/inside the margin.
-\end{{itemize}}
-\end{{column}}\begin{{column}}{{.43\textwidth}}
-\begin{{block}}{{Selected fit}}
-$\lambda={results['selected']['linear_svm']['lambda']}$\\
-Accuracy {s['accuracy']:.3f}\\F1 {s['f1']:.3f}\\ROC-AUC {s['roc_auc']:.3f}
-\end{{block}}
-\centering\includegraphics[width=\linewidth,height=2.9cm,keepaspectratio]{{../reports/figures/pegasos_objective.png}}\\[-.2em]\scriptsize Objective by epoch; signed-margin plot and diagnostics are in the report.
-\end{{column}}\end{{columns}}
-\end{{frame}}
-\begin{{frame}}{{Nonlinear SVM: random Fourier features}}
-\begin{{columns}}\begin{{column}}{{.56\textwidth}}
-\begin{{itemize}}
-\item Map each scaled row to $z(x)=\sqrt{{2/D}}\cos(xW+b)$; seeded Gaussian frequencies approximate an RBF kernel.
-\item Train the same NumPy Pegasos solver on the mapped features.
-\item $D=128$, selected $\gamma={results['selected']['rff_svm']['gamma']}$, and {results['svm_diagnostics']['rff_train_sample_count']:,} training rows.
-\item RFF accuracy {t['rff_pegasos_svm']['accuracy']:.3f}, F1 {t['rff_pegasos_svm']['f1']:.3f}; RBF SVC reference accuracy {t['rbf_svc']['accuracy']:.3f}.
-\end{{itemize}}
-\end{{column}}\begin{{column}}{{.40\textwidth}}
-\centering\includegraphics[width=\linewidth,height=4.2cm,keepaspectratio]{{../reports/figures/rff_confusion_matrix.png}}
-\end{{column}}\end{{columns}}
-\end{{frame}}
-\begin{{frame}}{{Experimental design and uncertainty}}
-\begin{{columns}}\begin{{column}}{{.54\textwidth}}
-\begin{{enumerate}}
-\item Fit candidates on train and choose settings using validation only.
-\item Refit selected scratch and reference models on training rows.
-\item Evaluate the held-out test set after selection is finished.
-\item Run seeded five-fold CV on all {results['cross_validation']['decision_tree_regression']['sample_n']:,} training rows for dispersion.
-\end{{enumerate}}
-\end{{column}}\begin{{column}}{{.42\textwidth}}
-\begin{{block}}{{Matched references}}
-DecisionTreeRegressor/Classifier use corresponding settings. LinearSVC uses hinge loss and $C=1/(\lambda n)$ with fold-local scaling. RBF SVC uses the RFF training subset.
-\end{{block}}
-\end{{column}}\end{{columns}}
-\small CV: tree classification accuracy {results['cross_validation']['decision_tree_classification']['scratch']['mean']:.3f} $\pm$ {results['cross_validation']['decision_tree_classification']['scratch']['std']:.3f}; Pegasos {results['cross_validation']['pegasos_svm']['scratch']['mean']:.3f} $\pm$ {results['cross_validation']['pegasos_svm']['scratch']['std']:.3f}. Regression AZN MAE: {results['cross_validation']['decision_tree_regression']['azn_metrics']['scratch_mae']['mean']:,.0f} $\pm$ {results['cross_validation']['decision_tree_regression']['azn_metrics']['scratch_mae']['std']:,.0f}. Preprocessing vocabulary/imputation precedes folds, so this is not fully nested CV.
-\end{{frame}}
-\begin{{frame}}{{Task A: held-out price regression}}
-\begin{{columns}}\begin{{column}}{{.39\textwidth}}
-\begin{{block}}{{Scratch NumPy tree}}
-Log-price RMSE: {r['rmse']:.3f}\\Log-price MAE: {r['mae']:.3f}\\$R^2$ (log): {r['r2']:.3f}\\[.3em]
-AZN RMSE: {r['rmse_AZN']:,.0f}\\AZN MAE (average): {r['mae_AZN']:,.0f}\\Median absolute error: {r['median_absolute_error_AZN']:,.0f}\\Maximum absolute error: {r['max_absolute_error_AZN']:,.0f}\\$R^2$ (AZN): {r['r2_AZN']:.3f}
-\end{{block}}
-\small Matched sklearn tree AZN RMSE: {sr['rmse_AZN']:,.0f}.
-\end{{column}}\begin{{column}}{{.57\textwidth}}
-\centering\includegraphics[width=\linewidth,height=4.55cm,keepaspectratio]{{../reports/figures/regression_error_analysis.png}}
-\end{{column}}\end{{columns}}
-\end{{frame}}
-\begin{{frame}}{{Task B: held-out price-tier classification}}
-\scriptsize
-\begin{{tabular}}{{lrrrr}}
-\toprule Model & Accuracy & Precision & F1 & ROC-AUC\\\midrule
-NumPy tree & {c['accuracy']:.3f} & {c['precision']:.3f} & {c['f1']:.3f} & {c['roc_auc']:.3f}\\
-sklearn tree & {sc['accuracy']:.3f} & {sc['precision']:.3f} & {sc['f1']:.3f} & {sc['roc_auc']:.3f}\\
-NumPy Pegasos & {s['accuracy']:.3f} & {s['precision']:.3f} & {s['f1']:.3f} & {s['roc_auc']:.3f}\\
-LinearSVC & {t['linear_svc']['accuracy']:.3f} & {t['linear_svc']['precision']:.3f} & {t['linear_svc']['f1']:.3f} & {t['linear_svc']['roc_auc']:.3f}\\
-RFF Pegasos & {t['rff_pegasos_svm']['accuracy']:.3f} & {t['rff_pegasos_svm']['precision']:.3f} & {t['rff_pegasos_svm']['f1']:.3f} & {t['rff_pegasos_svm']['roc_auc']:.3f}\\
-RBF SVC & {t['rbf_svc']['accuracy']:.3f} & {t['rbf_svc']['precision']:.3f} & {t['rbf_svc']['f1']:.3f} & {t['rbf_svc']['roc_auc']:.3f}\\\bottomrule\end{{tabular}}
-\vspace{{.3em}}
-\begin{{columns}}\begin{{column}}{{.49\textwidth}}\centering\includegraphics[width=\linewidth,height=3.55cm,keepaspectratio]{{../reports/figures/classification_comparison.png}}\end{{column}}
-\begin{{column}}{{.49\textwidth}}\centering\includegraphics[width=\linewidth,height=3.55cm,keepaspectratio]{{../reports/figures/roc_curves.png}}\end{{column}}\end{{columns}}
-\end{{frame}}
-\begin{{frame}}{{Validation sweeps and learning behavior}}
-\begin{{columns}}\begin{{column}}{{.49\textwidth}}
-\centering\includegraphics[width=\linewidth,height=4.3cm,keepaspectratio]{{../reports/figures/tree_tuning.png}}\\[-.1em]\scriptsize Validation sweep: log-RMSE and F1.
-\end{{column}}\begin{{column}}{{.49\textwidth}}
-\centering\includegraphics[width=\linewidth,height=4.3cm,keepaspectratio]{{../reports/figures/tree_learning_curves.png}}\\[-.1em]\scriptsize Training and validation behavior.
-\end{{column}}\end{{columns}}
-\vspace{{.15em}}\small Select minimum Task A log-RMSE and maximum Task B validation F1; final models are refit on all training rows.
-\end{{frame}}
-\begin{{frame}}{{Model interpretation and error analysis}}
-\begin{{columns}}\begin{{column}}{{.49\textwidth}}
-\centering\includegraphics[width=\linewidth,height=4.3cm,keepaspectratio]{{../reports/figures/feature_importance_regression.png}}\\[-.1em]\scriptsize Regression tree importance.
-\end{{column}}\begin{{column}}{{.49\textwidth}}
-\centering\includegraphics[width=\linewidth,height=4.3cm,keepaspectratio]{{../reports/figures/feature_importance_classification.png}}\\[-.1em]\scriptsize Tier tree importance.
-\end{{column}}\end{{columns}}
-\vspace{{.15em}}\small Importance summarizes predictive split reductions; it is not causal. Price-quartile errors and category slices are in the report; the luxury tail drives large AZN-space errors.
-\end{{frame}}
-\begin{{frame}}{{What worked, what did not, and limits}}
-\begin{{columns}}\begin{{column}}{{.49\textwidth}}
-\begin{{block}}{{Worked well}}
-Leakage-aware split and feature design; scratch trees closely track matched tree references; median-tier prediction is easier than exact price prediction.
-\end{{block}}
-\begin{{block}}{{Did not work as well}}
-The 128-feature RFF model underperformed the linear SVM here; increasing nonlinear complexity did not improve this run.
-\end{{block}}
-\end{{column}}\begin{{column}}{{.47\textwidth}}
-\begin{{itemize}}
-\item Asking prices are not verified sale prices.
-\item One 2024 scrape does not represent today's market.
-\item Sparse districts and views may not generalize.
-\item Log errors and AZN errors describe different costs.
-\end{{itemize}}
-\end{{column}}\end{{columns}}
-\end{{frame}}
-\begin{{frame}}{{Reproducibility and project handoff}}
-\begin{{columns}}\begin{{column}}{{.57\textwidth}}
-\begin{{block}}{{One-command run}}
-\texttt{{python -m src.run\_all}}
-\end{{block}}
-\begin{{itemize}}
-\item Raw exploration: \texttt{{src/explore.py}}; saved splits: \texttt{{data/processed/}}.
-\item Metrics, plots, and limitations: \texttt{{reports/final\_report.md}}.
-\item Detailed module guides: \texttt{{docs/code\_explanations/}}.
-\item Tests: run the complete suite with \texttt{{pytest -q}}.
-\end{{itemize}}
-\end{{column}}\begin{{column}}{{.39\textwidth}}
-\begin{{block}}{{AI-assistance disclosure}}
-AI assisted with coding suggestions, debugging, corrections, and review. The team is responsible for checking the final code and results.
-\end{{block}}
-\end{{column}}\end{{columns}}
-\vfill\small Team PegaSold · MLE-AI-201 Final Project
-\end{{frame}}
-\end{{document}}
-'''
-    slide_dir.mkdir(exist_ok=True)
-    (slide_dir / "slides.tex").write_text(body, encoding="utf-8")
-    try:
-        with tempfile.TemporaryDirectory(prefix="pega-slides-") as tmp:
-            for _ in range(2):
-                subprocess.run(["pdflatex", "-interaction=nonstopmode", "-halt-on-error", f"-output-directory={tmp}", "slides.tex"], cwd=slide_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            shutil.copy2(Path(tmp) / "slides.pdf", slide_dir / "slides.pdf")
-            error_file = slide_dir / "latex_build_error.txt"
-            if error_file.exists(): error_file.unlink()
-    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
-        detail = exc.stdout[-2000:] if isinstance(exc, subprocess.CalledProcessError) and exc.stdout else str(exc)
-        (slide_dir / "latex_build_error.txt").write_text(detail, encoding="utf-8")
-
-
-def _slides_madrid(results, slide_dir):
-    """Build the 15-slide Madrid/Colombian-palette presentation."""
+def _slides_madrid(results, slide_dir, figures):
+    """Generate a 15-frame presentation following the supplied Madrid template."""
     t = results["test_results"]
     reg, tree, svm = t["decision_tree_regression"], t["decision_tree_classification"], t["pegasos_svm"]
-    baseline_reg, baseline_tree = t["sklearn_tree_regression"], t["sklearn_tree_classification"]
+    base_reg, base_tree = t["sklearn_tree_regression"], t["sklearn_tree_classification"]
+    cv = results["cross_validation"]
     team = "Emiliya Abdulhalimova · Aygun Asvarova · Murad Bagirzade · Kanan Karimli"
     body = rf'''\documentclass[aspectratio=169]{{beamer}}
 \usetheme{{Madrid}}
 \usepackage{{graphicx,booktabs,array}}
-\definecolor{{PegaBlue}}{{HTML}}{{003893}}
-\definecolor{{PegaYellow}}{{HTML}}{{FCD116}}
-\definecolor{{PegaRed}}{{HTML}}{{CE1126}}
-\setbeamercolor{{structure}}{{fg=PegaBlue}}
-\setbeamercolor{{frametitle}}{{fg=PegaBlue,bg=white}}
-\setbeamercolor{{title}}{{fg=white,bg=PegaBlue}}
-\setbeamercolor{{block title}}{{fg=white,bg=PegaBlue}}
-\setbeamercolor{{block body}}{{fg=black,bg=blue!4}}
-\setbeamertemplate{{navigation symbols}}{{}}
-\setbeamertemplate{{itemize item}}{{\color{{PegaRed}}\small$\blacktriangleright$}}
-\setbeamertemplate{{footline}}{{%
-  \leavevmode\hbox to \paperwidth{{\color{{PegaYellow}}\rule{{.50\paperwidth}}{{2pt}}\color{{PegaBlue}}\rule{{.25\paperwidth}}{{2pt}}\color{{PegaRed}}\rule{{.25\paperwidth}}{{2pt}}}}\par\nointerlineskip
-  \hbox{{\begin{{beamercolorbox}}[wd=.82\paperwidth,ht=2.6ex,dp=1ex,leftskip=1em]{{author in head/foot}}\color{{white}}PegaSold\hfill MLE-AI-201 · Bina.az Housing Price Prediction\end{{beamercolorbox}}\begin{{beamercolorbox}}[wd=.18\paperwidth,ht=2.6ex,dp=1ex,center]{{date in head/foot}}\color{{white}}\insertframenumber/\inserttotalframenumber\end{{beamercolorbox}}}}}}
-\setbeamercolor{{author in head/foot}}{{bg=PegaBlue}}
-\setbeamercolor{{date in head/foot}}{{bg=PegaBlue}}
 \title[Bina.az Price Prediction]{{Bina.az Housing Price Prediction}}
 \subtitle{{From-scratch decision trees and Pegasos SVM}}
-\author[PegaSold]{{MLE-AI-201 Final Project V3\\[.4em]PegaSold\\[.25em]{team}}}
-\date{{October 2026}}
+\author[PegaSold]{{PegaSold\\[.35em]{team}}}
+\institute[MLE-AI-201]{{MLE-AI-201 Final Project V3 · National AI Center}}
+\date[Oct 2026]{{October 2026}}
 \begin{{document}}
 \begin{{frame}}\titlepage\end{{frame}}
+\section{{Project and data}}
 \begin{{frame}}{{Project question — Speaker 1: data and task}}
 \begin{{itemize}}
-\item Bina.az asking-price scrape: {results['data_audit']['raw_rows']:,} raw rows; October–November 2024 records.
-\item Task A predicts $\ln(\mathrm{{price}})$; errors are reported in log space and AZN.
-\item Task B predicts standard/premium; the train-only median cutoff is {results['tier_threshold_AZN']:,.0f} AZN.
-\item Decision tree and Pegasos training are NumPy implementations; sklearn supplies comparison baselines.
+\item Real Bina.az asking-price scrape: {results['data_audit']['raw_rows']:,} raw rows from October–November 2024.
+\item Task A predicts $\ln(\mathrm{{price}})$; we report log-space and AZN-space errors.
+\item Task B classifies standard vs premium; the training median cutoff is {results['tier_threshold_AZN']:,.0f} AZN.
+\item The decision tree and Pegasos are NumPy implementations; sklearn is used as a comparison reference.
 \end{{itemize}}
 \end{{frame}}
-\begin{{frame}}{{Cleaning and leakage control — Speaker 1}}
+\begin{{frame}}{{Cleaning and leakage — Speaker 1}}
 \small
 \begin{{columns}}[T]\column{{.47\textwidth}}
 \begin{{itemize}}
-\item Normalize advert URLs to numeric IDs; keep each advert's latest scrape.
-\item Keep Baku's three residential categories; fixed bounds check price, floor area, AZN/m$^2$, rooms and floors.
-\item Train-derived log-price MAD fence: {results['data_audit']['log_price_outlier_filter']['price_fence_AZN'][0]:,.0f}--{results['data_audit']['log_price_outlier_filter']['price_fence_AZN'][1]:,.0f} AZN; removed {results['data_audit']['log_price_outlier_filter']['train_outliers_removed']:,} from train only.
-\item Splits after train filtering: {results['split']['train']:,}/{results['split']['validation']:,}/{results['split']['test']:,}; validation/test retain all rows.
-\item Exclude target-derived values, IDs, free text, owner/agency fields and raw address.
-\item Imputation, scaling and location vocabulary are fitted on train; raw CSV stays unchanged.
+\item Keep the latest scrape per normalized advert ID; retain Baku residential listings.
+\item Apply declared price, area, AZN/m$^2$, room and floor checks.
+\item Train-only log-price MAD fence: {results['data_audit']['log_price_outlier_filter']['price_fence_AZN'][0]:,.0f}–{results['data_audit']['log_price_outlier_filter']['price_fence_AZN'][1]:,.0f} AZN; removed {results['data_audit']['log_price_outlier_filter']['train_outliers_removed']:,} train rows only.
+\item Split: {results['split']['train']:,}/{results['split']['validation']:,}/{results['split']['test']:,}; validation/test rows remain intact.
+\item Exclude target-derived prices, free text, identifiers, seller fields and raw address.
+\item Fit imputation, scaling and category vocabulary from training rows.
 \end{{itemize}}
-\column{{.53\textwidth}}\centering\includegraphics[width=\linewidth,height=.77\textheight,keepaspectratio]{{../reports/figures/data_and_prices.png}}\end{{columns}}
+\column{{.53\textwidth}}\centering\includegraphics[width=\linewidth,height=.74\textheight,keepaspectratio]{{../reports/figures/data_and_prices.png}}\end{{columns}}
 \end{{frame}}
 \begin{{frame}}{{Exploration and feature design — Speaker 1}}
 \small
-\begin{{columns}}[T]\column{{.48\textwidth}}
+\begin{{columns}}[T]\column{{.47\textwidth}}
 \begin{{itemize}}
-\item Raw EDA measures missingness, repeat scrapes, leakage candidates, categories, geography and price tails.
-\item Parse Azerbaijani numeric strings; represent yes/no flags as 0/1 and invalid coordinates as missing.
-\item Use log area/land, location/type indicators and engineered distance/floor/area ratios.
-\item EDA describes this 2024 scrape; it is not causal evidence or today's market estimate.
+\item Parse Azerbaijani measurements; encode flags as 0/1.
+\item Use area, rooms, floor, land, coordinates, category and frequent locations.
+\item Engineer distance to centre, floor ratio, area per room and land ratio.
+\item Spatial and property-type patterns provide signal, not causal proof.
+\item This is a historical asking-price scrape, not transaction data.
 \end{{itemize}}
-\column{{.50\textwidth}}\centering\includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]{{../reports/figures/price_vs_area.png}}\end{{columns}}
+\column{{.51\textwidth}}\centering\includegraphics[width=\linewidth,height=.73\textheight,keepaspectratio]{{../reports/figures/price_vs_area.png}}\end{{columns}}
 \end{{frame}}
-\begin{{frame}}{{Split, targets, and validation protocol — Speaker 1}}
+\begin{{frame}}{{Split protocol and cross-validation — Speaker 1}}
 \begin{{itemize}}
-\item Seed {results['seed']}: {results['split']['train']:,} train, {results['split']['validation']:,} validation, {results['split']['test']:,} test rows.
-\item Repeated advert IDs are kept in one partition; split allocation balances price bins.
-\item Premium threshold is independently learned from training prices only: {results['tier_threshold_AZN']:,.0f} AZN.
-\item Select hyperparameters on validation, refit on train, and evaluate test after selection.
-\item Five-fold CV uses all {results['cross_validation']['decision_tree_regression']['sample_n']:,} training rows; shared preprocessing precedes folds, so CV is not fully nested.
+\item Fixed seed; split allocation balances price bins and keeps repeated advert IDs together.
+\item Premium threshold is computed from training prices only: {results['tier_threshold_AZN']:,.0f} AZN.
+\item Validation chooses hyperparameters; the held-out test is used after selection.
+\item Five-fold CV uses all {cv['decision_tree_regression']['sample_n']:,} training rows (about 32k fit / 8k validation per fold).
+\item Preprocessing statistics were fitted before folds; CV is indicative, not fully nested.
 \end{{itemize}}
 \end{{frame}}
+\section{{Models}}
 \begin{{frame}}{{Decision tree from scratch — Speaker 2}}
 \small
-\begin{{columns}}[T]\column{{.49\textwidth}}
+\begin{{columns}}[T]\column{{.48\textwidth}}
 \begin{{itemize}}
-\item Sort numeric values and evaluate boundaries between distinct adjacent values.
-\item Cumulative class counts compute Gini/entropy gain; target sums and squared sums compute MSE reduction.
-\item Recurse on the best legal split; leaves predict majority class or mean target.
-\item Depth, minimum leaf and split constraints control model growth.
-\item Importance sums sample-weighted impurity decreases; it does not establish causation.
+\item Sort numeric values and test boundaries between distinct adjacent values.
+\item Classification: Gini/entropy information gain; regression: MSE reduction.
+\item Cumulative counts and sums make split scoring efficient.
+\item Leaves predict majority class or mean target.
+\item Depth and minimum-leaf limits control model variance.
+\item Validation selects criterion, depth and leaf size; test remains untouched.
 \end{{itemize}}
-\column{{.49\textwidth}}\centering\includegraphics[width=\linewidth,height=.73\textheight,keepaspectratio]{{../reports/figures/decision_tree.png}}\end{{columns}}
+\column{{.50\textwidth}}\centering\includegraphics[width=\linewidth,height=.71\textheight,keepaspectratio]{{../reports/figures/tree_tuning.png}}\end{{columns}}
 \end{{frame}}
 \begin{{frame}}{{Tree results and generalization — Speaker 2}}
 \centering\small
@@ -569,118 +302,112 @@ def _slides_madrid(results, slide_dir):
 \toprule Metric & Score & Metric & Score\\\midrule
 Task A log RMSE & {reg['rmse']:.3f} & Task B accuracy & {tree['accuracy']:.3f}\\
 Task A AZN RMSE & {reg['rmse_AZN']:,.0f} & Task B F1 / AUC & {tree['f1']:.3f} / {tree['roc_auc']:.3f}\\
-Reference tree log RMSE & {baseline_reg['rmse']:.3f} & Reference accuracy & {baseline_tree['accuracy']:.3f}\\
+Reference log RMSE & {base_reg['rmse']:.3f} & Reference accuracy & {base_tree['accuracy']:.3f}\\
 \bottomrule\end{{tabular*}}
-\vspace{{.15cm}}\includegraphics[width=.88\linewidth,height=.53\textheight,keepaspectratio]{{../reports/figures/tree_learning_curves.png}}
+\vspace{{.15cm}}\includegraphics[width=.89\linewidth,height=.51\textheight,keepaspectratio]{{../reports/figures/tree_learning_curves.png}}
 \end{{frame}}
-\begin{{frame}}{{Interpreting the tree's AZN price error — Speaker 2}}
+\begin{{frame}}{{Regression error in AZN — Speaker 2}}
 \small
-\begin{{columns}}[T]
-\column{{.43\textwidth}}
+\begin{{columns}}[T]\column{{.43\textwidth}}
 \begin{{itemize}}
-\item The tree learns mean squared error on $\ln(\mathrm{{price}})$, then exponentiates its output to AZN.
-\item Test MAE: {reg['mae_AZN']:,.0f} AZN (average); median absolute error: {reg['median_absolute_error_AZN']:,.0f} AZN.
-\item Test RMSE: {reg['rmse_AZN']:,.0f} AZN; maximum absolute error: {reg['max_absolute_error_AZN']:,.0f} AZN.
-\item The maximum test error is {reg['max_absolute_error_AZN']:,.0f} AZN: one {reg['max_error_case']['actual_AZN']:,.0f} AZN home was estimated at {reg['max_error_case']['predicted_AZN']:,.0f} AZN.
-\item Validation/test retain prices outside the fence; luxury-tail errors remain large and visible.
-\item This is a historical asking-price estimate, not a transaction appraisal.
+\item Held-out test MAE: {reg['mae_AZN']:,.0f} AZN; median absolute error: {reg['median_absolute_error_AZN']:,.0f} AZN.
+\item Test RMSE: {reg['rmse_AZN']:,.0f} AZN.
+\item Largest absolute error: {reg['max_absolute_error_AZN']:,.0f} AZN.
+\item Actual {reg['max_error_case']['actual_AZN']:,.0f} AZN; predicted {reg['max_error_case']['predicted_AZN']:,.0f} AZN.
+\item Test retains extreme prices outside the training MAD fence.
 \end{{itemize}}
-\column{{.55\textwidth}}\centering
-\includegraphics[width=\linewidth,height=.72\textheight,keepaspectratio]{{../reports/figures/regression_error_analysis.png}}
-\end{{columns}}
+\column{{.55\textwidth}}\centering\includegraphics[width=\linewidth,height=.73\textheight,keepaspectratio]{{../reports/figures/regression_error_analysis.png}}\end{{columns}}
 \end{{frame}}
 \begin{{frame}}{{Linear Pegasos SVM — Speaker 3}}
 \small
-\begin{{columns}}[T]\column{{.53\textwidth}}
+\begin{{columns}}[T]\column{{.50\textwidth}}
 \begin{{itemize}}
-\item Minimize $\lambda\|w\|^2/2+$ mean hinge loss using stochastic subgradient updates.
-\item Standardize from training data; labels map to $-1,+1$ internally.
-\item Selected $\lambda={results['selected']['linear_svm']['lambda']}$; margin width $2/\|w\|={svm['margin_width']:.4f}$.
+\item Minimize regularized hinge loss with stochastic sub-gradient updates.
+\item Standardize using training data; labels map to $-1,+1$.
+\item Selected $\lambda={results['selected']['linear_svm']['lambda']}$; margin width $2/\|w\|={svm['margin_width']:.3f}$.
 \item Support vectors (signed margin $\leq1$): {svm['support_vector_count']:,} training rows.
-\item Test: accuracy {svm['accuracy']:.3f}, F1 {svm['f1']:.3f}, ROC-AUC {svm['roc_auc']:.3f}.
+\item Test accuracy {svm['accuracy']:.3f}; F1 {svm['f1']:.3f}; ROC-AUC {svm['roc_auc']:.3f}.
 \end{{itemize}}
-\column{{.47\textwidth}}\centering\includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]{{../reports/figures/pegasos_objective.png}}\end{{columns}}
+\column{{.48\textwidth}}\centering\includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]{{../reports/figures/pegasos_objective.png}}\end{{columns}}
 \end{{frame}}
 \begin{{frame}}{{Nonlinear SVM and decision margin — Speaker 3}}
 \small
 \begin{{columns}}[T]\column{{.48\textwidth}}
 \begin{{itemize}}
-\item Random Fourier Features use seeded cosine projections to approximate an RBF kernel; NumPy Pegasos trains the mapped features.
-\item 128 components; selected $\gamma={results['selected']['rff_svm']['gamma']}$; tuned on an 8,000-row training subset.
-\item RFF test: accuracy {t['rff_pegasos_svm']['accuracy']:.3f}, F1 {t['rff_pegasos_svm']['f1']:.3f}, AUC {t['rff_pegasos_svm']['roc_auc']:.3f}.
-\item Linear model performed better on this dataset/run; nonlinear mapping did not guarantee a gain.
+\item Seeded Random Fourier Features approximate an RBF kernel; the NumPy Pegasos optimizer trains the mapped features.
+\item 128 components; selected $\gamma={results['selected']['rff_svm']['gamma']}$; training subset 8,000.
+\item Matched RBF SVC uses the same subset; results depend on random features and seed.
+\item Nonlinear mapping did not outperform the linear model in this run.
 \end{{itemize}}
-\column{{.50\textwidth}}\centering\includegraphics[width=\linewidth,height=.75\textheight,keepaspectratio]{{../reports/figures/svm_margin_scores.png}}\end{{columns}}
+\column{{.50\textwidth}}\centering\includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]{{../reports/figures/svm_margin_scores.png}}\end{{columns}}
 \end{{frame}}
+\section{{Evaluation and findings}}
 \begin{{frame}}{{Fair comparison and uncertainty — Speaker 4}}
 \small
-\begin{{columns}}[T]\column{{.50\textwidth}}
+\begin{{columns}}[T]\column{{.49\textwidth}}
 \begin{{itemize}}
-\item Tree references use matching criteria/depth/leaf settings on the same input matrix.
-\item LinearSVC uses hinge loss, train-only scaling pipeline and objective-matched $C=1/(\lambda n)$.
-\item Five-fold CV is on a seeded train sample; report means and standard deviations.
-\item Test metrics are held out once; test results do not drive model selection.
+\item Tree references use matched criteria, depth and leaf settings.
+\item LinearSVC uses hinge loss, fold-local scaling and objective-matched $C=1/(\lambda n)$.
+\item Five-fold CV covers all {cv['decision_tree_regression']['sample_n']:,} training rows.
+\item Regression tree CV MAE: {cv['decision_tree_regression']['azn_metrics']['scratch_mae']['mean']:,.0f} $\pm$ {cv['decision_tree_regression']['azn_metrics']['scratch_mae']['std']:,.0f} AZN.
+\item sklearn tree CV MAE: {cv['decision_tree_regression']['azn_metrics']['sklearn_mae']['mean']:,.0f} $\pm$ {cv['decision_tree_regression']['azn_metrics']['sklearn_mae']['std']:,.0f} AZN.
+\item CV MAE is lower partly because filtered folds do not contain the test's full extreme-price tail.
 \end{{itemize}}
-\column{{.48\textwidth}}\centering\includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]{{../reports/figures/roc_curves.png}}\end{{columns}}
+\column{{.49\textwidth}}\centering\includegraphics[width=\linewidth,height=.74\textheight,keepaspectratio]{{../reports/figures/roc_curves.png}}\end{{columns}}
 \end{{frame}}
-\begin{{frame}}{{Held-out classification comparison — Speaker 4}}
+\begin{{frame}}{{Held-out test comparison — Speaker 4}}
 \scriptsize
 \begin{{tabular*}}{{\textwidth}}{{@{{\extracolsep{{\fill}}}}lrrrr}}
 \toprule Model & Accuracy & F1 & AUC & Fit sec\\\midrule
 Scratch tree & {tree['accuracy']:.3f} & {tree['f1']:.3f} & {tree['roc_auc']:.3f} & {tree['fit_seconds']:.2f}\\
-sklearn tree & {baseline_tree['accuracy']:.3f} & {baseline_tree['f1']:.3f} & {baseline_tree['roc_auc']:.3f} & {baseline_tree['fit_seconds']:.2f}\\
+sklearn tree & {base_tree['accuracy']:.3f} & {base_tree['f1']:.3f} & {base_tree['roc_auc']:.3f} & {base_tree['fit_seconds']:.2f}\\
 Pegasos & {svm['accuracy']:.3f} & {svm['f1']:.3f} & {svm['roc_auc']:.3f} & {svm['fit_seconds']:.2f}\\
 LinearSVC & {t['linear_svc']['accuracy']:.3f} & {t['linear_svc']['f1']:.3f} & {t['linear_svc']['roc_auc']:.3f} & {t['linear_svc']['fit_seconds']:.2f}\\
 RFF Pegasos & {t['rff_pegasos_svm']['accuracy']:.3f} & {t['rff_pegasos_svm']['f1']:.3f} & {t['rff_pegasos_svm']['roc_auc']:.3f} & {t['rff_pegasos_svm']['fit_seconds']:.2f}\\
 \bottomrule\end{{tabular*}}
-\vspace{{.18cm}}\begin{{columns}}\column{{.5\textwidth}}\includegraphics[width=\linewidth,height=.53\textheight,keepaspectratio]{{../reports/figures/classification_comparison.png}}\column{{.5\textwidth}}\includegraphics[width=\linewidth,height=.53\textheight,keepaspectratio]{{../reports/figures/regression_error_analysis.png}}\end{{columns}}
+\vspace{{.18cm}}\begin{{columns}}\column{{.5\textwidth}}\includegraphics[width=\linewidth,height=.52\textheight,keepaspectratio]{{../reports/figures/classification_comparison.png}}\column{{.5\textwidth}}\includegraphics[width=\linewidth,height=.52\textheight,keepaspectratio]{{../reports/figures/regression_error_analysis.png}}\end{{columns}}
 \end{{frame}}
-\begin{{frame}}{{Validation sweeps and model interpretation — Speaker 4}}
-\begin{{columns}}[T]\column{{.50\textwidth}}\centering\includegraphics[width=\linewidth,height=.65\textheight,keepaspectratio]{{../reports/figures/tree_tuning.png}}\\Validation parameter sweeps.
-\column{{.48\textwidth}}\centering\includegraphics[width=\linewidth,height=.65\textheight,keepaspectratio]{{../reports/figures/feature_importance_regression.png}}\\Regression tree importance.
+\begin{{frame}}{{Tuning and feature importance — Speaker 4}}
+\begin{{columns}}[T]\column{{.49\textwidth}}\centering\includegraphics[width=\linewidth,height=.72\textheight,keepaspectratio]{{../reports/figures/tree_tuning.png}}\\Validation sweeps.
+\column{{.49\textwidth}}\centering\includegraphics[width=\linewidth,height=.72\textheight,keepaspectratio]{{../reports/figures/feature_importance_regression.png}}\\Impurity importance is descriptive, not causal.
 \end{{columns}}
-\small Validation chooses settings; importance measures split utility and is not causal evidence.
 \end{{frame}}
 \begin{{frame}}{{Conclusions and limitations — All}}
 \begin{{itemize}}
-\item Median price-tier classification is easier than exact advertised-price prediction; AZN error exposes expensive-property misses.
-\item Asking prices are not verified transaction prices; one 2024 scrape is not today's market.
-\item Fixed cleaning bounds were chosen after source EDA; ambiguous cross-ID duplicate candidates may remain.
-\item Sparse locations and the non-nested CV preprocessing can limit generalization claims.
-\item Reproduce with \texttt{{python -m src.run\_all}}; full results and caveats are in \texttt{{reports/final\_report.md}}.
+\item Price-tier classification is easier than exact advertised-price prediction; luxury-tail errors remain large.
+\item Scratch and sklearn trees are close under matched settings.
+\item The held-out test MAE is {reg['mae_AZN']:,.0f} AZN; CV mean does not replace this result.
+\item Asking prices are not verified transactions; one 2024 scrape is not today's market.
+\item CV preprocessing precedes folds; ambiguous cross-ID duplicates may remain.
 \end{{itemize}}
 \end{{frame}}
-\begin{{frame}}{{Reproducibility and four-part handoff — All}}
+\begin{{frame}}{{Reproducibility and handoff — All}}
 \small
-\begin{{columns}}[T]\column{{.55\textwidth}}
 \begin{{enumerate}}
-\item Speaker 1: raw EDA, cleaning, targets, splits and leakage checks.
-\item Speaker 2: NumPy decision tree, criteria, tuning and tree results.
-\item Speaker 3: Pegasos, RFF mapping, margin and SVM findings.
-\item Speaker 4: baselines, cross-validation, metrics, error analysis and reproducibility.
+\item Speaker 1: data preparation, EDA, feature design and split protocol.
+\item Speaker 2: NumPy tree, validation tuning and regression error analysis.
+\item Speaker 3: Pegasos optimization, margin and nonlinear RFF model.
+\item Speaker 4: sklearn benchmarks, CV, metrics and reproducibility.
 \end{{enumerate}}
-\column{{.42\textwidth}}
-\begin{{block}}{{Run and verify}}
-\texttt{{python -m src.run\_all}}\\
-\texttt{{pytest -q}}\\[.4em]
-The automated test summary and outputs are in \texttt{{reports/}} and \texttt{{data/processed/}}.
+\begin{{block}}{{Reproduce}}
+\texttt{{python -m src.run\_all}}\qquad\texttt{{pytest -q}}\\
+Results, figures and caveats: \texttt{{reports/final\_report.md}}.
 \end{{block}}
-\end{{columns}}
-AI-assisted coding suggestions, debugging, corrections and review were used; the team checked the final code and results.
+AI assistance was used for coding suggestions, debugging, corrections and review; the team checked the final code and results.
 \end{{frame}}
 \end{{document}}
 '''
     slide_dir.mkdir(exist_ok=True)
     (slide_dir / "slides.tex").write_text(body, encoding="utf-8")
     try:
-        with tempfile.TemporaryDirectory(prefix="pega-slides-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="pega-slides-madrid-") as tmp:
             for _ in range(2):
                 subprocess.run(["pdflatex", "-interaction=nonstopmode", "-halt-on-error", f"-output-directory={tmp}", "slides.tex"], cwd=slide_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             shutil.copy2(Path(tmp) / "slides.pdf", slide_dir / "slides.pdf")
             error_file = slide_dir / "latex_build_error.txt"
             if error_file.exists(): error_file.unlink()
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
-        detail = exc.stdout[-2000:] if isinstance(exc, subprocess.CalledProcessError) and exc.stdout else str(exc)
+        detail = exc.stdout[-3000:] if isinstance(exc, subprocess.CalledProcessError) and exc.stdout else str(exc)
         (slide_dir / "latex_build_error.txt").write_text(detail, encoding="utf-8")
 
 
@@ -689,7 +416,7 @@ def write_reports(results, data, reports, figures):
     report_dir.mkdir(exist_ok=True)
     _markdown(results, data, reports, figures)
     _latex(results, report_dir)
-    _slides_madrid(results, reports.parent / "presentation")
+    _slides_madrid(results, reports.parent / "presentation", figures)
     from .site_data import write_site_data
     log_path = reports / "test_results.txt"
     write_site_data(results, reports.parent,

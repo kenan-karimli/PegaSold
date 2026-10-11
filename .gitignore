@@ -1,19 +1,48 @@
-# --- Data: never commit the raw archive or the extracted dataset ---
-# --- Python ---
+# Raw source data stays local; obtain it using the instructions in data/README.md.
+/data/bina_az_sale.csv
+/data/*.zip
+/data/*.tar
+/data/*.tar.gz
+
+# Python environments and caches.
 __pycache__/
 *.py[cod]
 *.egg-info/
 .ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 .venv/
+.venv-*/
 venv/
 env/
 
-# --- Generated outputs ---
-*.log
-*.aux
-*.out
-
-# --- OS / editor cruft ---
-.DS_Store
+# Local IDE and machine configuration.
 .idea/
 .vscode/
+.codex/
+.DS_Store
+
+# Temporary LaTeX build files. Final PDFs and .tex sources remain versioned.
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.nav
+*.out
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+latex_build_error.txt
+
+# Temporary logs and editor backups.
+*.log
+*~
+*.swp
+*.swo
