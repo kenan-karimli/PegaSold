@@ -10,8 +10,8 @@ from urllib.parse import unquote, urlparse
 import numpy as np
 import pandas as pd
 
-from .data_prep import build_features
-from .decision_tree import DecisionTree
+from data_prep import build_features
+from decision_tree import DecisionTree
 
 ROOT = Path(__file__).resolve().parents[1]
 PROCESSED = ROOT / "data" / "processed"
