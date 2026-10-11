@@ -1,7 +1,4 @@
 # --- Data: never commit the raw archive or the extracted dataset ---
-data/*
-!data/README.md
-
 # --- Python ---
 __pycache__/
 *.py[cod]
@@ -12,14 +9,9 @@ venv/
 env/
 
 # --- Generated outputs ---
-report/figures/*.pdf
-report/figures/*.png
-!report/figures/.gitkeep
 *.log
 *.aux
 *.out
-results/
-*.csv.gz
 
 # --- OS / editor cruft ---
 .DS_Store
