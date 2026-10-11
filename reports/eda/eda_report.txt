@@ -1,0 +1,685 @@
+bina.az sale — exploratory data analysis
+source file: data/bina_az_sale.csv
+read-only analysis; source CSV is not modified
+
+==============================================================================
+1. OVERVIEW — how big is the data and what are the columns?
+==============================================================================
+Rows:    100,775
+Columns: 51
+Memory:  431 MB in RAM
+
+Every column, its type, how much is missing, and how many distinct
+values it holds. A column with 1 distinct value carries no information;
+a column with ~1 distinct value per row is an identifier.
+
+                       dtype  missing_%  n_unique                                         example
+id_x                     str        0.0    100775            5df36281-6dc6-4d5d-89a7-5fcfa86f7608
+rel_url                  str        0.0       411                            /alqi-satqi?page=174
+estate_rel_url_x         str        0.0     64454                                  /items/4521724
+datetime_scrape_x        str        0.0        36                    2024-10-05 22:07:37.60613+00
+price                float64        0.0      2772                                        499999.0
+currency_x               str        0.0         1                                             AZN
+location                 str        0.0       142                                       Səbail r.
+attributes               str        0.0     21347                   4 otaqlı, 145 m², 7/9 mərtəbə
+city_when                str        0.0      1504                               Bakı, dünən 23:52
+city                     str        0.0         8                                            bakı
+day_x                    str        0.0        36                                      05.10.2024
+hour_x                   str        0.0      1226                                           23:52
+repair                   str       19.0         1                                         Təmirli
+vip                      str       91.5         1                                          vipped
+featured                 str       96.9         1                                        featured
+products_label           str       27.9         2                                        Agentlik
+bill_of_sale             str       21.0         1                                     Çıxarış var
+mortgage                 str       67.3         1                                     İpoteka var
+img_url                  str        0.0     64990  https://bina.azstatic.com/uploads/f460x345/20…
+id_y                     str        0.0    100775            92e82ea2-e1f3-4c2d-a284-151efd99281e
+estate_id                str        0.0    100775            5df36281-6dc6-4d5d-89a7-5fcfa86f7608
+estate_rel_url_y         str        0.0     64454                                  /items/4521724
+datetime_scrape_y        str        0.0       152                   2024-10-05 22:14:10.089116+00
+description              str        0.3     63385  Səbail Rayonu, İzzət Nəbiyev küçəsi, Fəxri Xi…
+unit_price               str       24.6       814                                    3 450 AZN/m²
+total_price          float64        0.0      2772                                        499999.0
+currency_y               str        0.0         1                                             AZN
+owner_name               str        0.7      5448                                          Kamran
+owner_title              str        0.7         2                                     mülkiyyətçi
+shop_name                str       28.5       316                                      Elite Ofis
+shop_title               str       28.5         1                        Daşınmaz əmlak agentliyi
+address                  str        0.0     16716                              İzzət Nəbiyev küç.
+lat                  float64        0.0     57991                               40.35881658415597
+lng                  float64        0.0     57207                               49.82409207076296
+updated                  str        0.0      1145                         yeniləndi: dünən 23:52 
+views                  int64        0.0      5896                                            1155
+day_y                    str        0.0        38                                      05.10.2024
+hour_y                   str       84.5      1028                                           23:52
+estate_details_id_x      str        0.0    100775            92e82ea2-e1f3-4c2d-a284-151efd99281e
+Binanın növü             str       99.8         3                                     Ev / Mənzil
+Kateqoriya               str        0.0         7                                    Köhnə tikili
+Mərtəbə                  str       24.6       392                                           7 / 9
+Otaq sayı            float64        9.3        19                                             4.0
+Sahə                     str        0.0      1804                                          145 m²
+Torpaq sahəsi            str       84.5       188                                         1.3 sot
+Təmir                    str        6.0         2                                             var
+Çıxarış                  str        0.0         2                                             var
+İpoteka                  str       67.3         1                                             var
+estate_details_id_y      str        0.0    100775            92e82ea2-e1f3-4c2d-a284-151efd99281e
+estate_rel_url           str        0.0     64454                                  /items/4521724
+extra_info               str        0.0      3000   Şəhidlər xiyabanı * Dağüstü parkı * Səbail r.
+
+Constant columns (one value only, useless as features): ['currency_x', 'repair', 'vip', 'featured', 'bill_of_sale', 'mortgage', 'currency_y', 'shop_title', 'İpoteka']
+Identifier-like columns (nearly unique per row):        ['id_x', 'id_y', 'estate_id', 'estate_details_id_x', 'estate_details_id_y']
+
+==============================================================================
+2. MISSING VALUES — and whether 'missing' really means 'unknown'
+==============================================================================
+Percentage missing per column (highest first, only columns > 0):
+Binanın növü      99.8
+featured          96.9
+vip               91.5
+Torpaq sahəsi     84.5
+hour_y            84.5
+İpoteka           67.3
+mortgage          67.3
+shop_title        28.5
+shop_name         28.5
+products_label    27.9
+unit_price        24.6
+Mərtəbə           24.6
+bill_of_sale      21.0
+repair            19.0
+Otaq sayı          9.3
+Təmir              6.0
+owner_name         0.7
+owner_title        0.7
+description        0.3
+
+THE TRAP. Some columns are never written as 'no'. The scraper only
+records them when the answer is 'yes', so NaN means 'no', not 'unknown'.
+Check: every one of these columns has exactly ONE distinct value.
+
+  vip            distinct non-missing values = ['vipped']   present in   8.5% of rows
+  featured       distinct non-missing values = ['featured']   present in   3.1% of rows
+  repair         distinct non-missing values = ['Təmirli']   present in  81.0% of rows
+  bill_of_sale   distinct non-missing values = ['Çıxarış var']   present in  79.0% of rows
+  mortgage       distinct non-missing values = ['İpoteka var']   present in  32.7% of rows
+  İpoteka        distinct non-missing values = ['var']   present in  32.7% of rows
+
+So these must be filled with 0/1, NOT dropped and NOT imputed with a
+mean. Dropping rows where 'vip' is missing would delete 91% of the data
+for no reason.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig01_missing_values.png
+
+==============================================================================
+3. DUPLICATES — is every row a different flat?
+==============================================================================
+Identical rows (all 51 columns equal): 0
+
+But each advert has a stable page address in `estate_rel_url_x`
+(e.g. /items/4521724). If the same address appears twice, the same
+flat was scraped twice.
+  rows in file:            100,775
+  distinct adverts:        63,785
+  extra (repeat) rows:     36,990  = 36.7% of the file
+
+How many times each advert appears:
+       adverts
+count         
+1        43186
+2        12175
+3         4445
+4         2019
+5          957
+6          481
+7          251
+8          132
+9           84
+10          35
+11          10
+12           6
+13           3
+17           1
+
+Does the price change between the copies of one advert?
+  adverts with a single price across their copies: 60,376
+  adverts whose price changed:                     3,409
+
+WHY THIS MATTERS. If we split the data randomly without removing these,
+the same flat can land in both train and test. The model then recalls a
+price it has already seen and the test score is a lie.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig02_duplicate_adverts.png
+
+==============================================================================
+4. LEAKAGE — which columns already contain the answer?
+==============================================================================
+A feature leaks if it could only be known once the price is known.
+Training on one makes the score perfect and the model worthless.
+
+`total_price` equals `price` in 99.99% of rows.
+  -> it is the target under a second name. DROP.
+
+`unit_price` is price per m². On the 75,996 rows where both it
+and the area are present, unit_price x area reconstructs the price:
+  within  1% of the true price: 100.0% of rows
+  within  5% of the true price: 100.0% of rows
+  -> it is the target divided by a feature we keep. DROP.
+
+`description` is free text written by the seller and very often states
+the price in words. Treat as leakage unless the price is stripped out:
+  17% of a 4,000-row sample mention a price word.
+
+VERDICT — drop before training: total_price, unit_price, description.
+
+==============================================================================
+5. THE TARGET `price` — what are we predicting?
+==============================================================================
+Summary in AZN:
+count        100,775
+mean         342,356
+std        2,042,627
+min               11
+1%            28,000
+5%            70,000
+25%          145,000
+50%          218,000
+75%          338,000
+95%          770,000
+99%        2,500,000
+max      600,000,000
+
+The mean (342,356) is far above the median (218,000).
+That gap is the signature of a long right tail: a few enormous values
+drag the average up. Look at both ends:
+
+  cheapest 10 prices: [11.0, 73.0, 127.0, 250.0, 400.0, 400.0, 700.0, 800.0, 999.0, 999.0]
+  priciest 5 prices:  ['600,000,000', '60,000,000', '40,000,000', '39,000,000', '36,000,000']
+
+  rows priced under 1,000 AZN:      10
+  rows priced over 10,000,000 AZN:  101
+  These are data-entry errors or whole buildings, not flats. A flat
+  does not cost 11 AZN. data_prep should cut an explicit price window
+  and the report must name the cut.
+
+WHY log(price). Prices span six orders of magnitude. In AZN, one
+mistake on a 10,000,000 flat outweighs thousands of ordinary flats, so
+squared error chases the outliers. log(price) turns 'twice as
+expensive' into a constant step, which is how people compare houses,
+and makes the distribution close to symmetric — see the figure.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig03_price_distribution.png
+
+==============================================================================
+6. NUMERIC FEATURES — ranges, nonsense values, and the link to price
+==============================================================================
+Price and floor-area comparisons use residential listings only. Bare-land
+`Sahə` is measured in sot, so it is not comparable to residential m².
+The raw file hides numbers inside text ('145 m²', '7 / 9'). After
+unpacking them:
+
+       area_m2     rooms    floor  building_floors  land_sot     views       lat       lng
+count  91567.0  91209.00  75996.0          75996.0   15571.0  91567.00  91567.00  91567.00
+mean     125.9      3.13     7.85            13.56     11.57    662.46     40.41     49.88
+std     106.44      1.36     4.89             5.45     298.5   1465.13      0.08      0.27
+min        1.0      1.00      1.0              1.0       0.1     23.00     32.69     12.59
+1%        35.0      1.00      1.0              3.0       0.6     38.00     40.33     49.74
+50%      100.0      3.00      7.0             16.0       4.0    244.00     40.40     49.85
+99%      560.0      8.00     20.0             27.0      67.3   6222.04     40.57     50.21
+max     3600.0     20.00     27.0             33.0   36000.0  67558.00     41.76     50.34
+
+Impossible or implausible values that data_prep must handle:
+  area <= 5 m²:                   2
+  area > 1,000 m²:                108
+  floor above building height:    0
+  rooms > 10:                     224
+  coordinates outside Azerbaijan: 4
+
+`views` is how many people opened the advert. It is recorded AFTER the
+advert goes live, so it is not something you know about a flat you are
+about to price. Treat it as unusable for an honest model.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig04_area_vs_price.png
+
+Correlation between log(area) and log(price) = 0.74. Strong and
+close to a straight line on log axes, which is the clearest single
+argument for modelling log(price) rather than price.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig05_rooms_vs_price.png
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig06_floor_vs_price.png
+
+Median price by floor is nearly flat — floor is a weak feature on its
+own. Ground floor and top floor are the only ones that stand out.
+
+==============================================================================
+7. CATEGORICAL FEATURES — how many groups, and do they separate price?
+==============================================================================
+For a feature to be useful, its groups must have different prices.
+We judge that with the median price per group (the median ignores the
+few huge outliers that would wreck a mean).
+
+--- Kateqoriya ---
+                    rows  median_price
+Kateqoriya                            
+Həyət evi/Bağ evi  15571      235000.0
+Köhnə tikili       18099      145000.0
+Obyekt              4046      589500.0
+Ofis                 154      475000.0
+Qaraj                 89       30000.0
+Torpaq              4919      150000.0
+Yeni tikili        57897      245000.0
+
+--- Təmir ---
+         rows  median_price
+Təmir                      
+var     81612      210000.0
+yoxdur  13162      270000.0
+NaN      6001      170000.0
+
+--- Çıxarış ---
+          rows  median_price
+Çıxarış                     
+var      79565      218000.0
+yoxdur   21210      215000.0
+
+--- İpoteka ---
+          rows  median_price
+İpoteka                     
+var      32939      223000.0
+NaN      67836      215000.0
+
+--- owner_title ---
+                   rows  median_price
+owner_title                          
+mülkiyyətçi       10385      159500.0
+vasitəçi (agent)  89733      224000.0
+NaN                 657      395352.0
+
+--- products_label ---
+                 rows  median_price
+products_label                     
+Agentlik        71981      235000.0
+Kompleks          649      396090.0
+NaN             28145      167000.0
+
+--- city ---
+               rows  median_price
+city                             
+astara           22       80000.0
+ağdam             3       25000.0
+bakı         100436      218000.0
+gədəbəy           3       39000.0
+naxçıvan mr       6       71000.0
+sumqayıt          4       68000.0
+xaçmaz          103       69000.0
+xırdalan        198       93750.0
+
+`location` holds 142 different district/metro
+names. One-hot encoding all of them would add that many columns, most
+of them almost always zero. data_prep should keep the frequent ones and
+fold the rest into a single 'other' bucket.
+
+REDUNDANCY CHECK — some pairs of columns say the same thing twice:
+  repair        notna  vs  Təmir == 'var'   agree on 100.0% of rows
+  bill_of_sale  notna  vs  Çıxarış == 'var'   agree on 100.0% of rows
+  mortgage      notna  vs  İpoteka == 'var'   agree on 100.0% of rows
+  -> keep one of each pair, drop the other.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig07_property_type.png
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig08_location_vs_price.png
+
+Across those 20 locations the median price runs from 78,000 to 365,000 AZN — a 4.7x spread. Location is a strong feature.
+
+==============================================================================
+8. GEOGRAPHY — do the coordinates make sense, and do they matter?
+==============================================================================
+Coordinates inside Azerbaijan: 100,771 (100.00%)
+Coordinates outside:           4
+  A listing in Baku cannot sit at longitude 12°. Those rows have a
+  broken coordinate; the rest of the row may still be fine, so
+  data_prep should blank the coordinate rather than delete the row.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig09_map_of_baku.png
+
+The map shows a clear, smooth price gradient: dark hexagons (expensive)
+sit in the city centre by the bay and fade outwards in every direction.
+Latitude and longitude therefore carry real signal — but
+as a pair, not individually, which a decision tree handles well
+(it can cut on both) and a linear SVM handles poorly.
+
+==============================================================================
+9. CORRELATION — which numeric columns move together?
+==============================================================================
+Pearson correlation measures straight-line agreement between two
+columns: +1 move together, 0 unrelated, -1 move oppositely. We use
+log(price) and log(area) because both are heavily skewed.
+
+                 log_price  log_area  rooms  floor  building_floors   lat   lng  views
+log_price             1.00      0.73   0.51   0.23             0.40 -0.07  0.03   0.09
+log_area              0.73      1.00   0.82   0.27             0.41  0.13  0.10   0.14
+rooms                 0.51      0.82   1.00   0.10             0.12  0.15  0.09   0.13
+floor                 0.23      0.27   0.10   1.00             0.61 -0.04 -0.01  -0.00
+building_floors       0.40      0.41   0.12   0.61             1.00 -0.07 -0.01  -0.01
+lat                  -0.07      0.13   0.15  -0.04            -0.07  1.00  0.68   0.06
+lng                   0.03      0.10   0.09  -0.01            -0.01  0.68  1.00   0.03
+views                 0.09      0.14   0.13  -0.00            -0.01  0.06  0.03   1.00
+
+Reading it: area and rooms both track price strongly, and they track
+each other strongly too — they partly repeat the same information.
+`views` is near zero, another reason to leave it out.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig10_correlation.png
+
+==============================================================================
+10. TASK B PREVIEW — the premium / standard split
+==============================================================================
+This is a whole-source descriptive illustration only. The model uses
+a separately computed training-set median and >= for the premium label.
+For this chart only, the whole-file median is 218,000 AZN:
+  standard (<= median): 50,525  (50.1%)
+  premium  (>  median): 50,250  (49.9%)
+
+These descriptive labels do not enter the model or held-out evaluation.
+
+Share of premium adverts inside each property type:
+                   premium_share   rows
+Kateqoriya                             
+Ofis                        85.7    154
+Obyekt                      77.8   4046
+Yeni tikili                 59.3  57897
+Həyət evi/Bağ evi           52.7  15571
+Torpaq                      39.3   4919
+Köhnə tikili                13.7  18099
+Qaraj                        1.1     89
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig11_price_tiers.png
+
+==============================================================================
+11. SCOPE DECISION — which rows belong in the task at all?
+==============================================================================
+`Kateqoriya` mixes seven kinds of property. The question is whether
+they are one prediction problem or several. Three measurements.
+
+1a. THE `Sahə` COLUMN DOES NOT USE ONE UNIT.
+Reading the text, not just the number:
+
+                  unit example
+Kateqoriya                    
+Həyət evi/Bağ evi   m²   90 m²
+Köhnə tikili        m²  145 m²
+Obyekt              m²  130 m²
+Ofis                m²  270 m²
+Qaraj               m²   36 m²
+Torpaq             sot  12 sot
+Yeni tikili         m²  100 m²
+
+`Torpaq` (bare land) measures area in SOT, everybody else in m².
+1 sot = 100 m². A naive numeric parse puts '12 sot' (1,200 m²) and
+'65 m²' in the same column as 12 and 65, so the plot of land looks
+five times SMALLER than the flat. This is silent: nothing crashes,
+the model simply learns nonsense.
+
+1b. THE CATEGORIES DO NOT SHARE A FEATURE SET.
+Percentage of rows where each feature is present:
+
+                    rows   area  rooms  floor  land size
+Kateqoriya                                              
+Yeni tikili        57897  100.0  100.0  100.0        0.0
+Köhnə tikili       18099  100.0  100.0  100.0        0.0
+Həyət evi/Bağ evi  15571  100.0   97.7    0.0      100.0
+Torpaq              4919  100.0    0.0    0.0        0.0
+Obyekt              4046  100.0    0.0    0.0        0.0
+Ofis                 154  100.0  100.0    0.0        0.0
+Qaraj                 89  100.0    0.0    0.0        0.0
+
+These are not gaps to impute. A plot of land HAS no floor and HAS no
+rooms; the question does not apply. Training one model across all
+seven means most of the feature matrix is structurally empty.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig12_feature_availability.png
+
+1c. PRICE PER m² IS CONSISTENT WITHIN FLATS, WILD ACROSS THE REST.
+If a category is one coherent market, its price per m² should sit in
+a narrow band. We measure the band as the 90th percentile divided by
+the 10th: '1.9' means the dear end is 1.9x the cheap end.
+
+                      p10  median     p90  p90 / p10
+Kateqoriya                                          
+Köhnə tikili       1658.0  2253.0  3111.0        2.0
+Yeni tikili        1641.0  2404.0  3357.0        2.0
+Ofis               1928.0  3143.0  5862.0        3.0
+Həyət evi/Bağ evi   578.0  1225.0  2212.0        4.0
+Qaraj               644.0  1333.0  2750.0        4.0
+Obyekt             1100.0  3300.0  9571.0        9.0
+
+Flats are the tightest (1.9-2.0x). Houses are looser at 3.8x, because
+a house's worth is partly its plot, and plot size varies hugely — but
+houses DO record their land size, so that spread is explainable with
+the columns we have. `Obyekt` at 8.7x is not: what a commercial unit
+earns is nowhere in this file.
+
+`Torpaq` is excluded from the table because its area is in sot, so a
+price per m² would be a hundredfold wrong. Measured in its own unit
+(AZN per sot) land still spreads 24x from its 10th to its 90th percentile — because what a plot is worth
+depends on permission to build on it, which is not in this dataset.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig13_price_consistency.png
+
+1d. WHAT EACH SCOPE COSTS IN ROWS (counted after deduplication).
+
+             adverts
+city                
+bakı           63523
+xırdalan         142
+xaçmaz            87
+astara            17
+naxçıvan mr        6
+sumqayıt           4
+ağdam              3
+gədəbəy            3
+
+                                     adverts kept  % of adverts
+everything                                  63785         100.0
+Baku only                                   63523          99.6
+Baku + residential (flats & houses)         57609          90.3
+Baku + apartments only                      48105          75.4
+
+RECOMMENDATION. Keep Baku + the three residential types
+(57,609 of 63,785 normalized unique advert IDs, 90.3%).
+  - 262 unique IDs are outside Baku; this project
+    makes a deliberately Baku-specific prediction task.
+  - 5,986 unique IDs are outside the three residential categories;
+    land uses sot while residential floor area uses m², and other categories
+    often lack rooms/floor. This is a scope choice, not a claim that those
+    listings are invalid.
+  - the three residential types share one feature set and price per m²
+    bands of 1.9-3.8x, so they are one problem.
+  - `Kateqoriya` stays as a feature, so the model can still tell a
+    house from a new-build flat.
+
+==============================================================================
+12. DEDUPLICATION DECISION — one row per advert, but which copy?
+==============================================================================
+The file was scraped repeatedly between 05 Oct 2024 and 19 Nov 2024
+(45 days). A normalized item ID may appear
+on multiple scrape days. The repeated-row share is
+36.7%; these are
+repeat observations of an advert, not necessarily distinct properties.
+
+2a. WHAT CHANGES BETWEEN THE COPIES OF ONE ADVERT?
+For every column, the share of repeated adverts where that column
+takes more than one value:
+
+views          100.0
+lng             41.8
+lat             40.2
+price           16.5
+vip              9.8
+description      8.1
+Sahə             1.8
+Mərtəbə          1.1
+Otaq sayı        0.4
+location         0.2
+Təmir            0.1
+Kateqoriya       0.1
+
+The table above shows which values change and how often. Repeated IDs
+are the same advert observed at different moments; retaining the last
+dated row defines the final observed asking price, not a completed sale.
+
+2b. WHEN THE PRICE MOVES, WHICH WAY DOES IT GO?
+  adverts observed more than once: 20,599
+  of those, the price changed:     3,372
+     price went DOWN: 2,649 (79%)
+     price went UP:   723 (21%)
+
+Size of the change, in percent of the first price:
+count    3372.0
+mean        1.1
+std       122.3
+min       -90.0
+10%        -7.0
+50%        -1.8
+90%         3.8
+max      6900.0
+
+Sellers cut their asking price far more often than they raise it —
+the normal behaviour of a listing that is not selling. The LAST
+observation is therefore the price the market actually saw last.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig14_price_changes.png
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig15_sightings.png
+
+2c. A SECOND KIND OF DUPLICATE, EASY TO MISS.
+Deduplicating on the advert address still leaves the same flat in the
+file twice if an agency posted it twice under two addresses. We look
+for adverts that agree on coordinates, area, rooms AND price:
+
+  adverts after address-deduplication: 63,785
+  of those, sharing all five values with another advert: 1,007 (1.7%)
+
+These are candidate matches, not verified duplicates. They may include
+distinct units with coincidentally equal measurements, so the pipeline
+does not remove them based on these five fields alone.
+
+RECOMMENDATION. Before splitting, normalize the advert URL to its numeric
+ID, sort by scrape date, and retain its last sighting. Matching on
+coordinates, area, rooms and price only identifies candidates: separate
+homes in one building can share these values. Report candidate matches;
+do not delete them without confirming address/property identity.
+
+==============================================================================
+13. PRICE WINDOW DECISION — where do we cut impossible prices?
+==============================================================================
+Measured on the recommended scope: 57,609 Baku residential adverts.
+
+3a. HOW FAR OUT THE TAILS GO.
+0.0001        1,456
+0.0010       25,000
+0.0050       39,000
+0.0100       46,000
+0.5000      209,000
+0.9900    1,250,000
+0.9950    1,700,000
+0.9990    3,084,698
+0.9999    5,379,400
+
+3b. ARE THE EXTREMES REAL LISTINGS OR TYPING MISTAKES?
+
+The eight cheapest:
+  price  area_m2  rooms        Kateqoriya        location  AZN per m²
+   73.0     90.0    3.0       Yeni tikili     Məmmədli q.         1.0
+  127.0    150.0    5.0 Həyət evi/Bağ evi        Sahil q.         1.0
+  250.0     30.0    2.0 Həyət evi/Bağ evi      Əhmədli m.         8.0
+  400.0     86.0    2.0       Yeni tikili        Saray q.         5.0
+  700.0     65.0    2.0      Köhnə tikili    Nərimanov r.        11.0
+  999.0    133.0    3.0       Yeni tikili  Memar Əcəmi m.         8.0
+ 1600.0    155.0    3.0       Yeni tikili     Binəqədi r.        10.0
+12000.0     65.0    2.0      Köhnə tikili Həzi Aslanov m.       185.0
+
+The six dearest:
+      price  area_m2  rooms        Kateqoriya             location  AZN per m²
+600000000.0    200.0    6.0       Yeni tikili Nəriman Nərimanov m.   3000000.0
+ 60000000.0     50.0    7.0       Yeni tikili   5-ci mikrorayon q.   1200000.0
+ 12000000.0   3600.0   14.0 Həyət evi/Bağ evi       İçəri Şəhər m.      3333.0
+ 12000000.0   1600.0   12.0 Həyət evi/Bağ evi            Bilgəh q.      7500.0
+  6200000.0   1400.0    9.0 Həyət evi/Bağ evi          Mərdəkan q.      4429.0
+  5950000.0    730.0    7.0 Həyət evi/Bağ evi          Badamdar q.      8151.0
+
+A 3-room flat does not sell for 73 AZN, and 600,000,000 AZN for 200 m²
+is 3,000,000 AZN per m² — about a thousand times the going rate, almost
+certainly a seller who typed too many zeros. These are not rare
+expensive flats; they are broken records.
+
+3c. PRICE PER m² SPOTS THE ERRORS BETTER THAN PRICE ALONE.
+A cheap price is not automatically wrong — a 30 m² studio really is
+cheap. What is wrong is a price that cannot be squared with the size.
+
+0.001     227.0
+0.010     477.0
+0.500    2235.0
+0.990    4800.0
+0.999    8150.0
+
+  adverts under    200 AZN/m²: 40
+  adverts over  20,000 AZN/m²: 11
+The ordinary market sits between roughly 1,000 and 5,000 AZN/m². The
+handful outside 200-20,000 are the broken ones.
+    [figure] /home/kanan/PycharmProjects/PegaSold/reports/eda/figures/fig16_price_per_m2.png
+
+3d. WHAT EACH CANDIDATE WINDOW COSTS.
+
+              adverts kept  adverts lost  % lost
+5k - 10M AZN       57598.0          11.0    0.02
+10k - 5M AZN       57592.0          17.0    0.03
+20k - 3M AZN       57529.0          80.0    0.14
+30k - 2M AZN       57315.0         294.0    0.51
+
+Combining the price window 10k-5M AZN with the
+price-per-m² window 200-20,000 AZN/m²:
+  removed by the price window only:      17
+  removed by the per-m² window only:     51
+  removed by either:                     59 (0.10% of the scope)
+
+RECOMMENDATION. Keep 10,000 <= price <= 5,000,000 AZN and
+200 <= price/m² <= 20,000, plus the 10-2,000 m² area range.
+These rules remove rows outside the declared bounds; they do not verify
+that every retained record is accurate.
+
+HONESTY NOTE. These are fixed domain bounds, not quantiles recomputed
+inside each split, and they are applied before the split. However, the
+bounds were selected after inspecting this dataset's full price/area
+distribution. That is a source-selection decision and should be disclosed;
+it is not evidence that the held-out test distribution was unknown.
+Report the exact bounds and count removed, and do not tune them against
+model test scores.
+
+==============================================================================
+14. CONCLUSIONS — what data_prep.py has to do
+==============================================================================
+DROP — no information:
+  identifiers and scrape bookkeeping (20 columns): id_x, id_y, estate_id, estate_details_id_x, estate_details_id_y, rel_url, estate_rel_url_x, estate_rel_url_y, estate_rel_url, img_url, datetime_scrape_x, datetime_scrape_y, day_x, hour_x, day_y, hour_y, city_when, updated, currency_x, currency_y
+  constant columns: currency_x, currency_y, shop_title, (Binanın növü: 99.8% empty)
+
+DROP — leakage:
+  total_price (identical to price), unit_price (price per m²), description
+
+DROP — not knowable before the sale:
+  views
+
+DEDUPLICATE:
+  last sighting per numeric ID extracted from estate_rel_url_x, before splitting
+
+DECIDE A SCOPE:
+  use the documented project scope: Baku + the three residential types;
+  other categories remain in the untouched raw source.
+
+PARSE OUT OF TEXT:
+  Sahə -> area_m2,  Mərtəbə -> floor + building_floors,
+  Torpaq sahəsi -> land_sot
+
+FILL FLAGS WITH 0/1, NOT MEANS:
+  vip, featured, repair, bill_of_sale, mortgage
+
+CUT IMPOSSIBLE VALUES (and count every row removed):
+  price 10,000–5,000,000 AZN; area 10–2,000 m²; price/m² 200–20,000;
+  non-missing rooms 1–30 and positive/plausible floor values
+
+ENCODE:
+  Kateqoriya and the frequent `location` values as one-hot, with a
+  shared 'other' bucket; yes/no columns as 0/1
+
+TARGET:
+  Task A on log(price);  Task B on a median split of the TRAINING set
+
+SCALING:
+  continuous features are standardized using training-only means/stds;
+  binary indicators remain 0/1. Tree split ordering is scale-invariant;
+  Pegasos is additionally scaled within training folds for its objective.
