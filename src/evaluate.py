@@ -33,9 +33,29 @@ from sklearn.svm import LinearSVC
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 from src.decision_tree import DecisionTree
+from src.ensemble import BaggedTrees
 from src.svm import PegasosSVM
 
 RANDOM_SEED = 42
+
+# Bagging settings. Each member trains on a bootstrap sample rather than all
+# 39,902 rows, which is what keeps this affordable with our tree. Measured on
+# validation: 30 trees x 6,000 rows cuts regression MSE by about 19% against a
+# single tree, for roughly 3-4 minutes of fitting per task.
+N_ESTIMATORS = 30
+BAG_MAX_SAMPLES = 6000
+BAG_MIN_SAMPLES_LEAF = 2   # members may fit harder; averaging controls variance
+
+# Members are grown DEEPER than the single tree, and deliberately not at the
+# depth the sweep chose. The sweep answers "how deep before one tree starts
+# overfitting?", which is the wrong question here: averaging already handles
+# the variance, so each member should fit hard and let the ensemble cancel the
+# noise. This is why random forests grow their trees out.
+#
+# Measured on validation (30 trees x 6,000 rows, classification):
+#   members at the swept depth 8 -> acc 0.9145, AUC 0.9757, OOB 0.9165
+#   members at depth 16          -> acc 0.9284, AUC 0.9808, OOB 0.9291
+BAG_MAX_DEPTH = 16
 
 # Depth grid for model selection. Coarse on purpose: each fit on the tuning
 # subsample costs seconds, and the validation curve is flat enough near the
@@ -334,13 +354,16 @@ def fig_error_analysis(y_true, y_pred, out: Path) -> None:
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run(processed_dir: str | Path, out_dir: str | Path, fast: bool = False) -> dict:
+def run(processed_dir: str | Path, out_dir: str | Path, fast: bool = False,
+        ensemble: bool = True) -> dict:
     out = Path(out_dir)
     data = load_data(processed_dir)
     n_tune = 1500 if fast else TUNE_SUBSAMPLE
     n_train = 4000 if fast else len(data["X_train"])
     depths = [2, 4, 6, 8] if fast else DEPTH_GRID
     epochs = 5 if fast else SVM_EPOCHS
+    n_estimators = 5 if fast else N_ESTIMATORS
+    bag_samples = 1000 if fast else BAG_MAX_SAMPLES
 
     print(f"\nevaluate: train={len(data['X_train']):,} rows x "
           f"{data['X_train'].shape[1]} features"
@@ -385,6 +408,36 @@ def run(processed_dir: str | Path, out_dir: str | Path, fast: bool = False) -> d
     svm_val_scores = svm.decision_function(data["X_valid"])
     threshold = tune_svm_threshold(svm_val_scores, data["tier_valid"])
 
+    # Bagging over our own tree. Members see bootstrap samples drawn from the
+    # FULL training set, not from the subsample used for the single tree, so
+    # the ensemble still learns from every row.
+    bag_r = bag_c = None
+    if ensemble:
+        print(f"\n  bagging: {n_estimators} trees x {bag_samples:,} rows per task "
+              f"(this is the slow part) …", flush=True)
+        t0 = time.time()
+        bag_depth = min(BAG_MAX_DEPTH, max(depths)) if fast else BAG_MAX_DEPTH
+        bag_r = BaggedTrees(task="regression", n_estimators=n_estimators,
+                            max_samples=bag_samples, max_depth=bag_depth,
+                            min_samples_leaf=BAG_MIN_SAMPLES_LEAF,
+                            random_state=RANDOM_SEED, oob_score=True).fit(
+            data["X_train"], data["y_train"])
+        timings["our_bagged_regression_s"] = time.time() - t0
+        print(f"  BaggedTrees (regression)          "
+              f"{timings['our_bagged_regression_s']:7.1f}s  "
+              f"OOB R2={bag_r.oob_score_:.4f}", flush=True)
+
+        t0 = time.time()
+        bag_c = BaggedTrees(task="classification", n_estimators=n_estimators,
+                            max_samples=bag_samples, max_depth=bag_depth,
+                            min_samples_leaf=BAG_MIN_SAMPLES_LEAF,
+                            random_state=RANDOM_SEED, oob_score=True).fit(
+            data["X_train"], data["tier_train"])
+        timings["our_bagged_classification_s"] = time.time() - t0
+        print(f"  BaggedTrees (classification)      "
+              f"{timings['our_bagged_classification_s']:7.1f}s  "
+              f"OOB acc={bag_c.oob_score_:.4f}", flush=True)
+
     # ── 3. metrics on validation and test ───────────────────────────────────
     print("\n[3/5] scoring …")
     metrics: dict = {
@@ -399,7 +452,14 @@ def run(processed_dir: str | Path, out_dir: str | Path, fast: bool = False) -> d
         "svm_n_support_vectors": int(svm.support_vector_mask_.sum()),
         "svm_margin_width": float(svm.margin_width_),
         "fit_seconds": timings,
+        "ensemble": bool(ensemble),
     }
+    if ensemble:
+        metrics["n_estimators"] = int(n_estimators)
+        metrics["bag_max_samples"] = int(bag_samples)
+        metrics["bag_max_depth"] = int(bag_depth)
+        metrics["oob_r2_regression"] = float(bag_r.oob_score_)
+        metrics["oob_acc_classification"] = float(bag_c.oob_score_)
 
     for split in ("valid", "test"):
         X, y, t = data[f"X_{split}"], data[f"y_{split}"], data[f"tier_{split}"]
@@ -411,6 +471,11 @@ def run(processed_dir: str | Path, out_dir: str | Path, fast: bool = False) -> d
         m = classification_metrics(t, svm.predict(X), scores)
         m["acc_tuned_threshold"] = float(((scores >= threshold).astype(int) == t).mean())
         metrics[f"our_svm_{split}"] = m
+        if ensemble:
+            metrics[f"our_bagged_regression_{split}"] = regression_metrics(
+                y, bag_r.predict(X))
+            metrics[f"our_bagged_classification_{split}"] = classification_metrics(
+                t, bag_c.predict(X), bag_c.predict_proba(X)[:, 1])
 
     # ── 4. sklearn baselines, hyper-parameters matched ──────────────────────
     print("\n[4/5] scikit-learn baselines (matched hyper-parameters) …")
@@ -442,22 +507,25 @@ def run(processed_dir: str | Path, out_dir: str | Path, fast: bool = False) -> d
     fig_bias_variance(sweep_r, sweep_c, out)
     fig_predictions(y_va, tree_r.predict(X_va), out)
     fig_classification(t_va, tree_c.predict_proba(X_va)[:, 1], svm_val_scores, out)
-    fig_model_comparison(
-        {
-            "OUR DecisionTree": metrics["our_tree_regression_valid"]["rmse"],
-            "sklearn tree": metrics["sklearn_tree_regression_valid"]["rmse"],
-            "Ridge (a=1)": metrics["ridge_valid"]["rmse"],
-            "Dummy (mean)": metrics["dummy_regression_valid"]["rmse"],
-        },
-        {
-            "OUR DecisionTree": metrics["our_tree_classification_valid"]["acc"],
-            "OUR PegasosSVM": metrics["our_svm_valid"]["acc"],
-            "sklearn tree": metrics["sklearn_tree_classification_valid"]["acc"],
-            "LinearSVC (C=0.1)": metrics["linear_svc_valid"]["acc"],
-            "Dummy (stratified)": metrics["dummy_classification_valid"]["acc"],
-        },
-        out,
-    )
+    reg_bars = {}
+    clf_bars = {}
+    if ensemble:
+        reg_bars["OUR BaggedTrees"] = metrics["our_bagged_regression_valid"]["rmse"]
+        clf_bars["OUR BaggedTrees"] = metrics["our_bagged_classification_valid"]["acc"]
+    reg_bars.update({
+        "OUR DecisionTree": metrics["our_tree_regression_valid"]["rmse"],
+        "sklearn tree": metrics["sklearn_tree_regression_valid"]["rmse"],
+        "Ridge (a=1)": metrics["ridge_valid"]["rmse"],
+        "Dummy (mean)": metrics["dummy_regression_valid"]["rmse"],
+    })
+    clf_bars.update({
+        "OUR DecisionTree": metrics["our_tree_classification_valid"]["acc"],
+        "OUR PegasosSVM": metrics["our_svm_valid"]["acc"],
+        "sklearn tree": metrics["sklearn_tree_classification_valid"]["acc"],
+        "LinearSVC (C=0.1)": metrics["linear_svc_valid"]["acc"],
+        "Dummy (stratified)": metrics["dummy_classification_valid"]["acc"],
+    })
+    fig_model_comparison(reg_bars, clf_bars, out)
     fig_error_analysis(y_va, tree_r.predict(X_va), out)
 
     out.mkdir(parents=True, exist_ok=True)
@@ -466,6 +534,31 @@ def run(processed_dir: str | Path, out_dir: str | Path, fast: bool = False) -> d
     print(f"\n  wrote -> {out / 'metrics.json'}")
     print(f"  wrote -> {out / 'metrics.md'}")
     return metrics
+
+
+def _render_ensemble(m: dict) -> str:
+    """The bagging section, including the gain over a single tree."""
+    b_v, b_t = m["our_bagged_regression_valid"], m["our_bagged_regression_test"]
+    bc_v, bc_t = (m["our_bagged_classification_valid"],
+                  m["our_bagged_classification_test"])
+    single = m["our_tree_regression_valid"]["mse"]
+    gain = (1.0 - b_v["mse"] / single) * 100.0
+    return (
+        f"## Bagging — {m['n_estimators']} of our trees, "
+        f"{m['bag_max_samples']:,} bootstrap rows each, depth {m['bag_max_depth']}\n\n"
+        "| task | split | headline |\n"
+        "|---|---|---|\n"
+        f"| A | valid | MSE={b_v['mse']:.5f} RMSE={b_v['rmse']:.4f} "
+        f"R2={b_v['r2']:.4f} ({b_v['typical_error_pct']:.1f}%) |\n"
+        f"| A | test | MSE={b_t['mse']:.5f} RMSE={b_t['rmse']:.4f} "
+        f"R2={b_t['r2']:.4f} |\n"
+        f"| B | valid | acc={bc_v['acc']:.4f} AUC={bc_v['roc_auc']:.4f} |\n"
+        f"| B | test | acc={bc_t['acc']:.4f} AUC={bc_t['roc_auc']:.4f} |\n\n"
+        f"Against one tree: MSE {single:.5f} -> {b_v['mse']:.5f} "
+        f"(**{gain:+.1f}%**). Out-of-bag estimates, which use no validation "
+        f"data at all: R2={m['oob_r2_regression']:.4f} (regression), "
+        f"accuracy={m['oob_acc_classification']:.4f} (classification).\n\n"
+    )
 
 
 def render_markdown(m: dict) -> str:
@@ -498,7 +591,8 @@ def render_markdown(m: dict) -> str:
         f"test acc {s_t['acc_tuned_threshold']:.4f}. "
         f"{m['svm_n_support_vectors']:,} support vectors, "
         f"margin width {m['svm_margin_width']:.4f}.\n\n"
-        "## Baselines (validation, hyper-parameters matched to ours)\n\n"
+        + (_render_ensemble(m) if m.get("ensemble") else "")
+        + "## Baselines (validation, hyper-parameters matched to ours)\n\n"
         "| model | RMSE | accuracy |\n"
         "|---|---|---|\n"
         f"| sklearn tree | {m['sklearn_tree_regression_valid']['rmse']:.4f} | "
@@ -516,8 +610,10 @@ def main() -> int:
     p.add_argument("--out", default="reports/figures")
     p.add_argument("--fast", action="store_true",
                    help="subsample everything for a quick smoke test")
+    p.add_argument("--no-ensemble", action="store_true",
+                   help="skip bagging (the slowest step)")
     a = p.parse_args()
-    run(a.dir, a.out, fast=a.fast)
+    run(a.dir, a.out, fast=a.fast, ensemble=not a.no_ensemble)
     return 0
 
 

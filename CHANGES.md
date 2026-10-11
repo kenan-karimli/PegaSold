@@ -17,7 +17,8 @@ to the results.
 | File | Before (`k.karimli`) | After | What it is |
 |---|---|---|---|
 | `src/run_all.py` | 0 bytes (empty) | 183 lines | **new** — runs the whole pipeline |
-| `src/evaluate.py` | 32 bytes (one comment) | 526 lines | **rewritten** — scores our models |
+| `src/evaluate.py` | 32 bytes (one comment) | 580 lines | **rewritten** — scores our models |
+| `src/ensemble.py` | missing | 240 lines | **new** — bagging over our tree |
 | `src/data_prep.py` | 70 bytes (stub) | 706 lines | restored from `data-preprocessing` |
 | `src/validate.py` | missing | 23 KB | restored from `data-preprocessing` |
 | `src/__init__.py` | missing | 0 bytes | restored — makes `python -m src.*` work |
@@ -204,6 +205,73 @@ but do not make a claim about it in the report.
 
 ---
 
+## 7b. Bagging our own trees (the biggest win)
+
+**Problem.** A single tree has low bias but high variance — move a few rows
+and the splits change. Scikit-learn's RandomForest on the *same 82 features*
+scores MSE 0.03440 against our single tree's 0.05221. That gap is the model,
+not the data.
+
+**Fix.** Added `src/ensemble.py` with `BaggedTrees`: train many copies of our
+own `DecisionTree` on bootstrap samples and average them. `decision_tree.py`
+is not modified.
+
+**Result.**
+
+| Task | Metric | One tree | Bagged (30 x 6,000) | Change |
+|---|---|---|---|---|
+| A (valid) | MSE | 0.05232 | **0.04201** | **−19.7%** |
+| A (valid) | R² | 0.8691 | **0.8949** | +0.026 |
+| A (valid) | typical error | 15.9% | **14.6%** | −1.3 pp |
+| A (test) | MSE | 0.05547 | **0.04734** | **−14.7%** |
+| B (valid) | accuracy | 0.9113 | **0.9284** | +1.7 pp |
+| B (valid) | ROC-AUC | 0.9664 | **0.9808** | +1.4 pp |
+| B (test) | accuracy | 0.9159 | **0.9336** | +1.8 pp |
+
+Cost: about 4 minutes per task.
+
+**It also removed the trade-off from section 6.** A single tree had to choose
+between accuracy (depth 15: 0.9204 acc / 0.9481 AUC) and ranking (depth 8:
+0.9113 / 0.9664). Bagging beats both on both at once, because averaging 30
+trees produces finely graded probabilities *and* a more accurate vote.
+
+**Out-of-bag scores.** Each training row is scored using only the trees whose
+bootstrap sample excluded it, which gives a held-out estimate using no
+validation data: R² 0.8883 (regression), accuracy 0.9291 (classification).
+Both land close to the real validation numbers, which is independent evidence
+the ensemble is not overfitting. Worth a sentence in the report.
+
+### Two choices we made by measuring, not guessing
+
+**No feature subsampling.** A real random forest also picks a random subset of
+features at each node. We tested it:
+
+| Design | MSE | Needs editing `decision_tree.py`? |
+|---|---|---|
+| **plain bagging** | **0.04213** | no |
+| per-node 50% features | 0.04290 | yes |
+| per-tree 50% columns | 0.05431 | no |
+
+Plain bagging won, so Kenan's tree stays untouched. 59 of our 82 features are
+sparse location one-hots, and dropping them loses more signal than the extra
+decorrelation gains.
+
+**Members are grown deeper than the single tree.** Our first attempt passed
+the swept depth (8) to the ensemble. That was wrong. The sweep answers "how
+deep before *one* tree overfits", but averaging already controls variance, so
+members should fit hard and let the ensemble cancel the noise — this is why
+random forests grow their trees out.
+
+| Member depth | Accuracy | ROC-AUC | OOB |
+|---|---|---|---|
+| 8 (swept, wrong) | 0.9145 | 0.9757 | 0.9165 |
+| **16 (fixed)** | **0.9284** | **0.9808** | **0.9291** |
+
+Costing 1.4 points of accuracy. `BAG_MAX_DEPTH` in `src/evaluate.py` now sets
+this separately, with the measurement recorded beside it.
+
+---
+
 ## 8. Final numbers
 
 Full run, 39,902 training rows, seed 42, `fast_mode: false`.
@@ -224,6 +292,9 @@ is roughly ±33,000 AZN.
 by itself. The same model measured on raw manat would score about 8.5 billion,
 which is not worse — just a different ruler. Use R² and the percentage.
 
+Bagging 30 of our trees improves this to MSE 0.04201 / R² 0.8949 on
+validation (0.04734 / 0.8861 on test) — see section 7b.
+
 ### Task B — predicting price tier (premium vs standard)
 
 | Model | Split | Accuracy | ROC-AUC |
@@ -232,6 +303,8 @@ which is not worse — just a different ruler. Use R² and the percentage.
 | our `DecisionTree` | test | 0.9159 | 0.9695 |
 | our `PegasosSVM` | validation | 0.9029 | 0.9673 |
 | our `PegasosSVM` | test | 0.9084 | 0.9698 |
+| **our `BaggedTrees`** | validation | **0.9284** | **0.9808** |
+| **our `BaggedTrees`** | test | **0.9336** | **0.9827** |
 
 SVM details: 11,094 support vectors, margin width 0.3023, lambda 0.001.
 
@@ -285,14 +358,17 @@ be mentioned in the report since we cannot prove they are distinct properties.
    grows with the amount of data, so our chosen depths are probably slightly
    too shallow. This is a deliberate trade for runtime, and it is why
    classification sits at depth 8.
-2. **Our tree is slow.** `_best_split` rechecks the full column for every
+2. **Bagging members are not separately tuned.** `BAG_MAX_DEPTH` is a fixed
+   16, chosen by measurement rather than by its own sweep. A proper sweep over
+   member depth and tree count would likely gain a little more.
+3. **Our tree is slow.** `_best_split` rechecks the full column for every
    candidate threshold. Sorting each feature once and sweeping with running
    totals would make it far faster. Not required for the assignment, but it is
    the honest explanation for the 159-second fit.
-3. **`min_impurity_decrease` is not weighted.** scikit-learn scales it by
+4. **`min_impurity_decrease` is not weighted.** scikit-learn scales it by
    `n_node / n_total`; ours compares the raw gain. Same idea, so the same
    number will not prune identically in both. Not a bug.
-4. **`scipy` is not pinned** in `requirements.txt` (installed: 1.18.1). Every
+5. **`scipy` is not pinned** in `requirements.txt` (installed: 1.18.1). Every
    other dependency matches its pin.
 
 ---
@@ -302,10 +378,11 @@ be mentioned in the report since we cannot prove they are distinct properties.
 ```bash
 source .venv/bin/activate
 
-python -m src.run_all                        # everything, ~7 min
+python -m src.run_all                        # everything, ~14 min
 python -m src.run_all --fast                 # quick check, ~30 s, NOT real numbers
 python -m src.run_all --skip-prep            # reuse data/processed
 python -m src.run_all --skip-prep --skip-eda # only re-score the models
+python -m src.run_all --no-ensemble          # skip bagging (saves ~8 min)
 ```
 
 Then read:

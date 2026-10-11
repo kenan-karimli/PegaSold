@@ -109,7 +109,26 @@ def write_summary(processed: str, fig_out: str, elapsed: float) -> None:
         f"| our PegasosSVM | B | test | acc={s_t['acc']:.4f} "
         f"AUC={s_t['roc_auc']:.4f} (tuned-threshold acc "
         f"{s_t['acc_tuned_threshold']:.4f}) |\n\n"
-        "## Against scikit-learn (validation, matched hyper-parameters)\n\n"
+        + (
+            "## Bagging our own trees\n\n"
+            f"{m['n_estimators']} trees, {m['bag_max_samples']:,} bootstrap rows each.\n\n"
+            f"- Task A valid: MSE={m['our_bagged_regression_valid']['mse']:.5f} "
+            f"RMSE={m['our_bagged_regression_valid']['rmse']:.4f} "
+            f"R2={m['our_bagged_regression_valid']['r2']:.4f} "
+            f"(**{(1 - m['our_bagged_regression_valid']['mse'] / a_v['mse']) * 100:+.1f}%** "
+            f"MSE vs one tree)\n"
+            f"- Task A test: RMSE={m['our_bagged_regression_test']['rmse']:.4f} "
+            f"R2={m['our_bagged_regression_test']['r2']:.4f}\n"
+            f"- Task B valid: acc={m['our_bagged_classification_valid']['acc']:.4f} "
+            f"AUC={m['our_bagged_classification_valid']['roc_auc']:.4f}\n"
+            f"- Task B test: acc={m['our_bagged_classification_test']['acc']:.4f} "
+            f"AUC={m['our_bagged_classification_test']['roc_auc']:.4f}\n"
+            f"- Out-of-bag (no validation data used): "
+            f"R2={m['oob_r2_regression']:.4f}, "
+            f"acc={m['oob_acc_classification']:.4f}\n\n"
+            if m.get("ensemble") else ""
+        )
+        + "## Against scikit-learn (validation, matched hyper-parameters)\n\n"
         f"- Task A RMSE: ours {a_v['rmse']:.4f} vs sklearn {sk_r['rmse']:.4f} "
         f"(difference {abs(a_v['rmse'] - sk_r['rmse']):.4f})\n"
         f"- Task B accuracy: ours {c_v['acc']:.4f} vs sklearn {sk_c['acc']:.4f} "
@@ -135,6 +154,8 @@ def main() -> int:
                    help="reuse an existing data/processed instead of rebuilding")
     p.add_argument("--skip-eda", action="store_true",
                    help="skip explore.py (the slowest non-model step)")
+    p.add_argument("--no-ensemble", action="store_true",
+                   help="skip bagging (saves most of the model runtime)")
     a = p.parse_args()
     start = time.time()
 
@@ -168,6 +189,8 @@ def main() -> int:
     cmd = [sys.executable, "-m", "src.evaluate", "--dir", a.processed, "--out", a.fig_out]
     if a.fast:
         cmd.append("--fast")
+    if a.no_ensemble:
+        cmd.append("--no-ensemble")
     sh(*cmd)
 
     # 5. one-page summary pointing at the artifacts
